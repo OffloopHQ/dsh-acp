@@ -1,16 +1,17 @@
 # Distribution
 
-Status: portable Node artifact and dual npm publication implemented; initial
-npm registry bootstrap and Trusted Publisher setup remain owner-controlled
-deployment gates.
+Status: portable Node artifact and dual npm publication implemented and
+verified. Both identities were bootstrapped at `0.1.0`; `v0.1.1` published the
+private GitHub Release plus public `dsh-acp` and `@offloophq/dsh-acp` packages
+through the configured npm Trusted Publishers.
 
 ## Artifact matrix
 
 | Artifact | Source access | Runtime requirement | Default release |
 | --- | --- | --- | --- |
 | Portable Node archive | private GitHub Release unless mirrored | Node `^22.19.0` or `>=24.0.0` and compatible installed DSH | yes |
-| `dsh-acp` npm package | public after one-time bootstrap | Node `^22.19.0` or `>=24.0.0` and compatible installed DSH | canonical npm identity |
-| `@offloophq/dsh-acp` npm package | public after one-time bootstrap | same as `dsh-acp` | exact-version scoped mirror |
+| `dsh-acp` npm package | public; `0.1.1` registry readback verified | Node `^22.19.0` or `>=24.0.0` and compatible installed DSH | canonical npm identity |
+| `@offloophq/dsh-acp` npm package | public; `0.1.1` registry readback verified | same as `dsh-acp` | exact-version scoped mirror |
 | Bun standalone binaries | CI retains only the compile manifest, not binaries | DSH in-process host compatibility is not implemented or validated | no; compatibility and license-review gates |
 | Host-bundled adapter | delivered inside a downstream host package | compatible installed DSH | host-controlled integration, not downloaded at runtime |
 
@@ -55,18 +56,21 @@ The same immutable workflow artifact feeds both the private GitHub Release and
 a separate minimal npm job. Only that job receives `id-token: write`; it does
 not check out source, install dependencies, rebuild, or repack. It publishes
 the two exact verified `.tgz` files and reads both SHA-512 registry integrities
-back. A rerun skips an existing exact version and
-fails closed before any publish if either registry entry differs. Each registry
-command is time-bounded, so recovery after a partial or timed-out dual-package
-publish reconciles both exact registry states instead of blindly replaying an
+back. A rerun skips an existing exact version and fails closed before any
+publish if either registry entry differs. After a successful publish, only an
+absent version is revalidated online for up to one minute per identity;
+integrity, authentication, timeout, signal, metadata, and other command errors
+fail immediately. Recovery after a partial or timed-out dual-package publish
+therefore reconciles both exact registry states instead of blindly replaying an
 ambiguous mutation.
 
-Both names need a one-time traditional-authentication bootstrap because npm
-cannot attach a Trusted Publisher to a package that does not yet exist. After
-bootstrap, each package independently trusts `OffloopHQ/dsh-acp` workflow
-`release.yml`; the environment claim stays empty while the current private-repo
-plan does not provide GitHub Environments. No long-lived publish token belongs
-in GitHub Actions. The complete operational contract is in
+Both names required a one-time traditional-authentication bootstrap because npm
+cannot attach a Trusted Publisher to a package that does not yet exist. That
+bootstrap completed at `0.1.0`. Each package now independently trusts
+`OffloopHQ/dsh-acp` workflow `release.yml`; the environment claim stays empty
+while the current private-repo plan does not provide GitHub Environments. No
+long-lived publish token belongs in GitHub Actions. The complete operational
+contract is in
 [`npm-publishing.md`](npm-publishing.md).
 
 npm provenance cannot currently be generated from a private GitHub source

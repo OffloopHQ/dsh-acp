@@ -2,9 +2,12 @@
 
 Date: 2026-08-02
 
-Status: `0.1.0` preview reviewed and the client-neutral source tree published
-to the private GitHub repository with an exact `refs/heads/main` readback.
-Artifact release and real-client acceptance remain release gates.
+Status: historical snapshot of the `0.1.0` preview review as of 2026-08-02.
+The client-neutral source tree had been published to the private GitHub
+repository with an exact `refs/heads/main` readback; the release and gate
+statements below describe that date, not current deployment state. Current
+authority lives in [`../distribution.md`](../distribution.md) and
+[`../npm-publishing.md`](../npm-publishing.md).
 
 ## Scope and evidence
 
@@ -168,7 +171,7 @@ because the outer runner denied its local network proxy with `EPERM`. This is
 an external evidence gap, not a successful online audit and not a discovered
 vulnerability.
 
-## Remaining gates
+## Remaining gates as of 2026-08-02
 
 - Validate a pinned source revision from at least one downstream ACP client
   with an exact revision readback.
