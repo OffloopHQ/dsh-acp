@@ -64,14 +64,14 @@ npm install --global @offloophq/dsh-acp
 
 ## Distribution and runtime boundary
 
-The source repository is private. That does not make every possible artifact public:
+The source repository and its published GitHub Releases are public:
 
-- GitHub Release assets in a private repository require repository read access.
-- The public `dsh-acp` package and its `@offloophq/dsh-acp` mirror make their
-  npm tarballs public even while source remains private.
-- A downstream distributor with repository access can fetch a fixed private
-  artifact during its authenticated build and ship the checksum-verified
-  adapter in its own package.
+- GitHub Release assets can be downloaded anonymously and checked against the
+  release `SHA256SUMS` file.
+- The `dsh-acp` package and its `@offloophq/dsh-acp` mirror publish the same
+  executable payload through public npm identities.
+- A downstream distributor can fetch a fixed public release artifact, verify
+  its checksum, and ship the adapter in its own package.
 
 The default release artifact is an esbuild-produced, portable JavaScript bundle for Node.js `^22.19.0` or `>=24.0.0`. This adapter is not shipped or executed as TypeScript, and it does not invoke npm, pnpm, npx, the `tsx` CLI, or network downloads at runtime. The versioned driver does import DSH's already-installed TypeScript sources through DSH's own validated tsx loader; that loader and source tree remain DSH-owned prerequisites.
 
@@ -127,7 +127,10 @@ outer network/provider interception conformance has passed; a successful ACP
 `initialize` alone is not protected-readiness proof. The vendor capability
 metadata reports this explicitly as `offloop.dsh-acp.security`.
 
-Report vulnerabilities privately to the repository owners. Do not include API keys, credentials, prompts, or customer data in an issue.
+Report vulnerabilities through the repository's
+[private vulnerability reporting](https://github.com/OffloopHQ/dsh-acp/security/advisories/new)
+channel. Do not include API keys, credentials, prompts, or customer data in a
+public issue.
 
 ## License
 

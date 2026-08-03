@@ -76,14 +76,18 @@
   only an absent version for up to one minute per package. Integrity conflicts,
   authentication failures, invalid metadata, and command failures fail
   immediately; propagation lag remains unknown until bounded readback settles.
-- While the private repository plan lacks GitHub Environments and tag rulesets,
-  releases require actor ID `22412638`, an annotated exact-version tag, and a
-  peeled commit already contained by `main`. The npm Trusted Publisher
-  environment claim stays empty until both package bindings and the workflow
-  are deliberately migrated together. The actor check is an operational
-  accident guard, not authority separation from repository administrators;
-  under this plan every administrator who can change `main` remains part of
-  the release trust boundary.
+- The public repository currently releases with actor ID `22412638`, an
+  annotated exact-version tag, and a peeled commit already contained by
+  `main`. No publish Environment or tag ruleset is configured yet. The npm
+  Trusted Publisher environment claim stays empty until a release/tag freeze
+  protects a coordinated fail-closed migration of the workflow and both
+  package bindings, with every control read back before the freeze ends. The
+  actor check is an operational accident guard, not authority separation from
+  repository administrators; every administrator who can change `main`
+  remains part of the current release trust boundary.
+- Keep GitHub private vulnerability reporting, secret scanning, and push
+  protection enabled. Never put live credentials, prompts, or customer data in
+  a public issue or synthetic security fixture.
 - Every behavior change needs focused tests, including cancellation and stale
   event fencing where applicable.
 - A client abandoning an async prompt generator must keep the session fenced

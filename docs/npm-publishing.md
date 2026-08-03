@@ -3,7 +3,8 @@
 Status: dual-package release automation implemented and verified. Both package
 identities were bootstrapped at `0.1.0`; npm Trusted Publisher records bind
 `OffloopHQ/dsh-acp` and `release.yml`; `0.1.1` was published through GitHub
-Actions OIDC.
+Actions OIDC. The source repository is public; the current npm bindings remain
+environment-free and the current publication path still disables provenance.
 
 ## Package identities
 
@@ -52,28 +53,31 @@ unknown result.
 
 ## GitHub controls and trust boundary
 
-The repository is private, and its current GitHub plan does not expose
-Environments or tag rulesets. The API returns an upgrade-or-public-repository
-error for both controls. The workflow therefore uses controls available on the
-current plan: a fixed stable actor ID, an annotated tag, exact tag/version
-matching, and `main` ancestry. Keep the repository private; do not weaken or
-remove these release checks.
+The repository is public. No publish Environment or tag ruleset is configured
+yet, so the current workflow still uses a fixed stable actor ID, an annotated
+tag, exact tag/version matching, and `main` ancestry. Do not weaken or remove
+these release checks during a control migration.
 
 The actor-ID check prevents an accidental release by a different current
 administrator, but it is not an authority boundary against repository
 administrators: an administrator can change the workflow on `main`, and npm's
 environment-free trust record then trusts that reviewed filename. Under the
-current plan, every repository administrator is therefore part of the release
-trust boundary. If publication authority must be separated from repository
-administration, upgrade the private repository to enable a protected tag plus
-restricted Environment, or change npm automation to staged publishing with a
-separate 2FA approval.
+current configuration, every repository administrator is therefore part of
+the release trust boundary. A future protected `v*` tag ruleset and publish
+Environment narrow that boundary only if workflow changes on `main`, tag
+create/update/delete and bypass actors, required reviewers, self-review,
+administrator bypass, and control ownership are all explicitly restricted and
+read back. Otherwise repository administrators remain inside the boundary. A
+separate staged-publishing flow with independent 2FA approval is another
+possible authority boundary.
 
 Keep Actions secrets free of `NPM_TOKEN` and `NODE_AUTH_TOKEN`. Trusted
 publishing supplies a short-lived credential only to `npm publish`. If the
-repository later gains rulesets and Environments, add a protected `v*` tag
-ruleset and a restricted publish environment in a separately reviewed change,
-then update both npm Trusted Publisher records to match.
+release migrates to GitHub rulesets and Environments, first freeze release-tag
+creation, then configure and read back the controls, update the workflow and
+each npm Trusted Publisher record, and read every binding back independently.
+Intermediate mismatches are intentionally fail closed; do not lift the freeze
+until all records agree.
 
 ## One-time npm bootstrap (completed at 0.1.0)
 
@@ -112,7 +116,9 @@ Trusted publishing:
 - organization/user: `OffloopHQ`;
 - repository: `dsh-acp`;
 - workflow filename: `release.yml`;
-- environment: leave empty on the current private-repository plan;
+- environment: leave empty for the current live binding; when a restricted
+  publish Environment is introduced, perform the workflow and both package
+  binding updates under a release-tag freeze and read each one back;
 - allowed action: `npm publish` only.
 
 With npm CLI 11.15 or newer and an interactive 2FA-capable login, the
@@ -135,12 +141,15 @@ is verified, use npm package Settings to require 2FA and disallow traditional
 tokens, revoke any temporary bootstrap token if one was used, and live-read
 both package settings before treating token publishing as disabled. Preserve
 the exact repository/workflow binding. If an environment is added later,
-update both bindings atomically.
+update both bindings under the release-tag freeze and read each one back before
+allowing another release.
 
 ## Provenance boundary
 
-Trusted Publishing authentication works for public packages sourced from a
-private GitHub repository, but npm provenance does not. The release keeps
-`provenance=false` until the repository is public and both registry entries
-show verified provenance. Do not describe OIDC authentication itself as a
-provenance attestation.
+Trusted Publishing authentication and npm provenance are separate. `v0.1.1`
+was published from the then-private source repository with
+`provenance=false`; making the repository public does not retroactively attest
+that version. The current workflow and package metadata keep provenance
+disabled until a separately reviewed release change enables it and both new
+registry entries show verified provenance. Do not describe OIDC authentication
+itself as a provenance attestation.

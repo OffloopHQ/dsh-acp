@@ -2,25 +2,26 @@
 
 Status: portable Node artifact and dual npm publication implemented and
 verified. Both identities were bootstrapped at `0.1.0`; `v0.1.1` published the
-private GitHub Release plus public `dsh-acp` and `@offloophq/dsh-acp` packages
-through the configured npm Trusted Publishers.
+GitHub Release plus public `dsh-acp` and `@offloophq/dsh-acp` packages through
+the configured npm Trusted Publishers. The source repository and existing
+GitHub Releases are now public.
 
 ## Artifact matrix
 
 | Artifact | Source access | Runtime requirement | Default release |
 | --- | --- | --- | --- |
-| Portable Node archive | private GitHub Release unless mirrored | Node `^22.19.0` or `>=24.0.0` and compatible installed DSH | yes |
+| Portable Node archive | public GitHub Release; anonymous `0.1.1` download readback verified | Node `^22.19.0` or `>=24.0.0` and compatible installed DSH | yes |
 | `dsh-acp` npm package | public; `0.1.1` registry readback verified | Node `^22.19.0` or `>=24.0.0` and compatible installed DSH | canonical npm identity |
 | `@offloophq/dsh-acp` npm package | public; `0.1.1` registry readback verified | same as `dsh-acp` | exact-version scoped mirror |
 | Bun standalone binaries | CI retains only the compile manifest, not binaries | DSH in-process host compatibility is not implemented or validated | no; compatibility and license-review gates |
 | Host-bundled adapter | delivered inside a downstream host package | compatible installed DSH | host-controlled integration, not downloaded at runtime |
 
-A private GitHub repository's release assets are not anonymous public downloads.
-A downstream distributor may fetch a pinned release during its authenticated
-build, verify `SHA256SUMS`, and embed the portable adapter. The end user's ACP
-host then starts the local JavaScript adapter; it does not download TypeScript,
-npm packages, or DSH at runtime. The adapter still requires the compatible DSH
-installation's own source tree and tsx loader.
+Published GitHub Release assets are anonymous public downloads. A downstream
+distributor may fetch a pinned release, verify `SHA256SUMS`, and embed the
+portable adapter. The end user's ACP host then starts the local JavaScript
+adapter; it does not download TypeScript, npm packages, or DSH at runtime. The
+adapter still requires the compatible DSH installation's own source tree and
+tsx loader.
 
 SHA-256 checksums establish byte integrity against the trusted manifest. They are not signatures. Artifact signing must be documented only after a real signing and verification path exists.
 
@@ -49,11 +50,12 @@ and the exact JavaScript bundle before any archive path is used.
 
 Every annotated release tag from the fixed release actor builds and verifies
 one candidate without OIDC, after proving exact version and `main` ancestry.
-This actor check is an operational accident guard; while the private-repository
-plan lacks rulesets and Environments, repository administrators remain inside
-the release trust boundary because they can change the workflow on `main`.
-The same immutable workflow artifact feeds both the private GitHub Release and
-a separate minimal npm job. Only that job receives `id-token: write`; it does
+This actor check is an operational accident guard. The public repository does
+not yet configure a publish Environment or tag ruleset, so repository
+administrators remain inside the release trust boundary because they can
+change the workflow on `main`. The same immutable workflow artifact feeds both
+the public GitHub Release and a separate minimal npm job. Only that job
+receives `id-token: write`; it does
 not check out source, install dependencies, rebuild, or repack. It publishes
 the two exact verified `.tgz` files and reads both SHA-512 registry integrities
 back. A rerun skips an existing exact version and fails closed before any
@@ -68,16 +70,19 @@ Both names required a one-time traditional-authentication bootstrap because npm
 cannot attach a Trusted Publisher to a package that does not yet exist. That
 bootstrap completed at `0.1.0`. Each package now independently trusts
 `OffloopHQ/dsh-acp` workflow `release.yml`; the environment claim stays empty
-while the current private-repo plan does not provide GitHub Environments. No
-long-lived publish token belongs in GitHub Actions. The complete operational
-contract is in
+until a separately reviewed migration freezes release tags, configures and
+reads back the workflow controls, updates each npm binding, and verifies all
+three independently. Intermediate mismatches must fail publishing, and the
+freeze remains until every readback agrees. No long-lived publish token belongs
+in GitHub Actions. The complete operational contract is in
 [`npm-publishing.md`](npm-publishing.md).
 
-npm provenance cannot currently be generated from a private GitHub source
-repository. The workflow explicitly disables provenance while the repository
-is private. If source visibility and npm support later make provenance
-available, enable it as a separately reviewed gate and verify both published
-registry records.
+The public source repository now satisfies the source-visibility precondition
+for npm provenance, but `v0.1.1` was published with provenance disabled and the
+current workflow still sets `provenance=false`. Visibility does not
+retroactively attest an existing version. Enable provenance only in a
+separately reviewed release change and verify the resulting attestation on
+both newly published registry records.
 
 ## Experimental Bun standalone build
 

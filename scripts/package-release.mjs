@@ -57,7 +57,7 @@ async function sourceEpoch() {
     if (Number.isSafeInteger(parsed) && parsed >= 0) return parsed;
   } catch {
     // A fixed development fallback keeps local packages reproducible before
-    // the private repository has its first commit.
+    // a development checkout has its first commit.
   }
   return 1_704_067_200;
 }

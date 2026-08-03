@@ -42,7 +42,7 @@ jobs:
           node scripts/package-release.mjs
           node scripts/verify-release.mjs
           node dist/index.js --version
-      - name: Upload private CI candidates
+      - name: Upload ephemeral CI candidates
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: dsh-acp-portable-candidates
