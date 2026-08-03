@@ -69,6 +69,9 @@
   already-published version by exact registry integrity, and fail closed on a
   mismatch. Build and verify once without OIDC; only the minimal downstream
   publish job may receive `id-token: write`.
+- Pass local npm release archives by absolute path (or an explicit `./` path).
+  A bare `release/...tgz` argument is parsed by npm as GitHub shorthand rather
+  than as a repository-local tarball.
 - While the private repository plan lacks GitHub Environments and tag rulesets,
   releases require actor ID `22412638`, an annotated exact-version tag, and a
   peeled commit already contained by `main`. The npm Trusted Publisher

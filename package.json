@@ -1,6 +1,6 @@
 {
   "name": "dsh-acp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A client-neutral Agent Client Protocol adapter for DeepSeek Harness",
   "license": "MIT",
   "type": "module",

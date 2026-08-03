@@ -62,8 +62,8 @@ jobs:
         run: |
           package_version="$(node -p 'require("./package.json").version')"
           for archive in \
-            "release/dsh-acp-${package_version}.tgz" \
-            "release/offloophq-dsh-acp-${package_version}.tgz"
+            "$GITHUB_WORKSPACE/release/dsh-acp-${package_version}.tgz" \
+            "$GITHUB_WORKSPACE/release/offloophq-dsh-acp-${package_version}.tgz"
           do
             install_root="$(mktemp -d)"
             npm install --global --prefix "$install_root" --ignore-scripts --no-audit --no-fund "$archive"

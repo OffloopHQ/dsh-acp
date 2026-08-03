@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   assertBunStandaloneManifest,
@@ -6,6 +9,17 @@ import {
   BUN_TARGETS,
   BUN_VERSION,
 } from "./lib/bun-manifest.mjs";
+
+const root = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
+const releaseWorkflow = await readFile(join(root, ".github/workflows/release.yml"), "utf8");
+assert(
+  releaseWorkflow.includes('"$GITHUB_WORKSPACE/release/dsh-acp-${package_version}.tgz"'),
+  "release workflow must install the canonical npm archive by absolute path",
+);
+assert(
+  releaseWorkflow.includes('"$GITHUB_WORKSPACE/release/offloophq-dsh-acp-${package_version}.tgz"'),
+  "release workflow must install the scoped npm archive by absolute path",
+);
 
 function validManifest() {
   return {
