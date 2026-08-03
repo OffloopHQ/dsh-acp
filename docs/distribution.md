@@ -1,13 +1,16 @@
 # Distribution
 
-Status: portable Node artifact implemented; public distribution decisions remain owner-controlled.
+Status: portable Node artifact and dual npm publication implemented; initial
+npm registry bootstrap and Trusted Publisher setup remain owner-controlled
+deployment gates.
 
 ## Artifact matrix
 
 | Artifact | Source access | Runtime requirement | Default release |
 | --- | --- | --- | --- |
 | Portable Node archive | private GitHub Release unless mirrored | Node `^22.19.0` or `>=24.0.0` and compatible installed DSH | yes |
-| npm package | public only after an explicit npm publish | Node `^22.19.0` or `>=24.0.0` and compatible installed DSH | buildable; publishing off by default |
+| `dsh-acp` npm package | public after one-time bootstrap | Node `^22.19.0` or `>=24.0.0` and compatible installed DSH | canonical npm identity |
+| `@offloophq/dsh-acp` npm package | public after one-time bootstrap | same as `dsh-acp` | exact-version scoped mirror |
 | Bun standalone binaries | CI retains only the compile manifest, not binaries | DSH in-process host compatibility is not implemented or validated | no; compatibility and license-review gates |
 | Host-bundled adapter | delivered inside a downstream host package | compatible installed DSH | host-controlled integration, not downloaded at runtime |
 
@@ -25,29 +28,52 @@ SHA-256 checksums establish byte integrity against the trusted manifest. They ar
 `node scripts/package-release.mjs` produces:
 
 - a portable Node `.tar.gz` with the executable bundle and complete runtime dependency licenses;
-- an npm `.tgz` produced by `npm pack`;
+- canonical `dsh-acp` and scoped `@offloophq/dsh-acp` npm `.tgz` files
+  produced by `npm pack` from one verified payload;
 - a normalized CycloneDX SBOM for runtime npm dependencies;
 - a build manifest containing bundle and lockfile hashes;
 - `SHA256SUMS` covering the exact asset set.
 
 `node scripts/verify-release.mjs` verifies the exact asset and checksum set, then
-cross-binds package name/version/MIT license, exact runtime dependencies, the
-lockfile and bundle hashes, portable and npm archive contents, build manifest,
-and CycloneDX component versions and licenses. The portable and npm artifacts
-also carry the public documents linked from their README. Optional Bun archives
-are bound to a strict, exact six-target schema, contained source paths, source
-binary hashes, and the exact JavaScript bundle before any archive path is used.
+cross-binds both package names, their shared version/MIT license, exact runtime
+dependencies, the lockfile and bundle hashes, portable and npm archive
+contents, build manifest, and CycloneDX component versions and licenses. The
+two npm archives must be byte-identical for every member except their
+`package.json` identity metadata. The portable and npm artifacts also carry the
+public documents linked from their README. Optional Bun archives are bound to
+a strict, exact six-target schema, contained source paths, source binary hashes,
+and the exact JavaScript bundle before any archive path is used.
 
 ## npm and provenance
 
-Public npm publication is disabled by default. It requires an owner decision, package-name bootstrap, npm trusted-publisher configuration, and an explicit repository variable. The workflow's `id-token: write` permission authenticates the job to npm through OIDC; it does not mean the resulting package has provenance.
+Every annotated release tag from the fixed release actor builds and verifies
+one candidate without OIDC, after proving exact version and `main` ancestry.
+This actor check is an operational accident guard; while the private-repository
+plan lacks rulesets and Environments, repository administrators remain inside
+the release trust boundary because they can change the workflow on `main`.
+The same immutable workflow artifact feeds both the private GitHub Release and
+a separate minimal npm job. Only that job receives `id-token: write`; it does
+not check out source, install dependencies, rebuild, or repack. It publishes
+the two exact verified `.tgz` files and reads both SHA-512 registry integrities
+back. A rerun skips an existing exact version and
+fails closed before any publish if either registry entry differs. Each registry
+command is time-bounded, so recovery after a partial or timed-out dual-package
+publish reconciles both exact registry states instead of blindly replaying an
+ambiguous mutation.
 
-When that gate is enabled, the publication job regenerates and verifies the
-release set from the exact tag, publishes the exact verified npm `.tgz` rather
-than repacking the working tree, and reads the version plus an exact SHA-512
-registry-integrity match back after publication.
+Both names need a one-time traditional-authentication bootstrap because npm
+cannot attach a Trusted Publisher to a package that does not yet exist. After
+bootstrap, each package independently trusts `OffloopHQ/dsh-acp` workflow
+`release.yml`; the environment claim stays empty while the current private-repo
+plan does not provide GitHub Environments. No long-lived publish token belongs
+in GitHub Actions. The complete operational contract is in
+[`npm-publishing.md`](npm-publishing.md).
 
-npm provenance cannot currently be generated from a private GitHub source repository. The workflow must not claim provenance while the repository is private. If source visibility and npm support later make provenance available, enable it as a separately reviewed gate and verify the published registry record.
+npm provenance cannot currently be generated from a private GitHub source
+repository. The workflow explicitly disables provenance while the repository
+is private. If source visibility and npm support later make provenance
+available, enable it as a separately reviewed gate and verify both published
+registry records.
 
 ## Experimental Bun standalone build
 

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,6 +13,7 @@ const metadata = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
 const releaseDir = join(root, "release");
 const distDir = join(root, "dist");
 const includeBunStandalone = process.env["DSH_ACP_INCLUDE_BUN_STANDALONE"] === "1";
+const npmPackageNames = ["dsh-acp", "@offloophq/dsh-acp"];
 const publicDocs = [
   "docs/architecture.md",
   "docs/bun-standalone-relinking.md",
@@ -19,6 +21,7 @@ const publicDocs = [
   "docs/compatibility.md",
   "docs/distribution.md",
   "docs/independent-implementation.md",
+  "docs/npm-publishing.md",
   "docs/licenses/BUN-1.3.13-LICENSE.md",
 ];
 
@@ -186,6 +189,30 @@ try {
 if (!Array.isArray(npmPack) || typeof npmPack[0]?.filename !== "string") {
   throw new Error("npm pack did not report an output filename");
 }
+if (metadata.name !== npmPackageNames[0] || npmPack[0].filename !== `dsh-acp-${metadata.version}.tgz`) {
+  throw new Error("canonical npm package identity does not match dsh-acp");
+}
+
+const aliasRoot = await mkdtemp(join(tmpdir(), "dsh-acp-npm-alias-"));
+try {
+  await run("tar", ["-xzf", join(releaseDir, npmPack[0].filename), "-C", aliasRoot], { cwd: root });
+  const aliasPackageRoot = join(aliasRoot, "package");
+  const aliasPackagePath = join(aliasPackageRoot, "package.json");
+  const aliasMetadata = JSON.parse(await readFile(aliasPackagePath, "utf8"));
+  aliasMetadata.name = npmPackageNames[1];
+  await writeFile(aliasPackagePath, `${JSON.stringify(aliasMetadata, null, 2)}\n`);
+  const aliasPack = JSON.parse(
+    await run("npm", ["pack", "--json", "--pack-destination", releaseDir], {
+      cwd: aliasPackageRoot,
+      capture: true,
+    }),
+  );
+  if (!Array.isArray(aliasPack) || aliasPack[0]?.filename !== `offloophq-dsh-acp-${metadata.version}.tgz`) {
+    throw new Error("scoped npm mirror did not report the expected output filename");
+  }
+} finally {
+  await rm(aliasRoot, { recursive: true, force: true });
+}
 
 const rawSbom = JSON.parse(
   await run(
@@ -208,6 +235,7 @@ const buildManifest = {
   schemaVersion: 1,
   name: metadata.name,
   version: metadata.version,
+  npmPackages: npmPackageNames,
   sourceDateEpoch: epoch,
   runtime: { kind: "portable-node-bundle", nodeRange: "^22.19.0 || >=24.0.0" },
   bundle: {

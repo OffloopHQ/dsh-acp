@@ -49,12 +49,26 @@ Legacy `--candidate` and `--dsh-root` spellings are accepted as aliases for `--d
 
 See the complete [CLI contract](docs/cli.md).
 
+## npm installation
+
+Published releases use `dsh-acp` as the canonical npm name and publish the
+same version and executable payload as the `@offloophq/dsh-acp` scoped mirror.
+Install either identity, not both in the same npm prefix, because both own the
+same `dsh-acp` executable:
+
+```text
+npm install --global dsh-acp
+# or
+npm install --global @offloophq/dsh-acp
+```
+
 ## Distribution and runtime boundary
 
 The source repository is private. That does not make every possible artifact public:
 
 - GitHub Release assets in a private repository require repository read access.
-- A public npm publication would make the npm tarball public even while source remains private.
+- The public `dsh-acp` package and its `@offloophq/dsh-acp` mirror make their
+  npm tarballs public even while source remains private.
 - A downstream distributor with repository access can fetch a fixed private
   artifact during its authenticated build and ship the checksum-verified
   adapter in its own package.
@@ -80,6 +94,9 @@ node scripts/verify-release.mjs
 ```
 
 Build outputs are written to `dist/`; release assets are written to `release/`.
+See [npm publishing](docs/npm-publishing.md) for the dual-package identity,
+one-time registry bootstrap, Trusted Publisher, release-tag, trust-boundary,
+and recovery contracts.
 
 ## Security properties
 

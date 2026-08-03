@@ -63,6 +63,20 @@
 - The portable Node archive is the authoritative release artifact. Bun
   standalone output is a compile-only experiment until in-process DSH hosting,
   licensing, signing, and platform validation all pass.
+- `dsh-acp` is the canonical public npm identity and
+  `@offloophq/dsh-acp` is its scoped mirror. Every release must publish the
+  same version and exact non-metadata payload under both names, reconcile an
+  already-published version by exact registry integrity, and fail closed on a
+  mismatch. Build and verify once without OIDC; only the minimal downstream
+  publish job may receive `id-token: write`.
+- While the private repository plan lacks GitHub Environments and tag rulesets,
+  releases require actor ID `22412638`, an annotated exact-version tag, and a
+  peeled commit already contained by `main`. The npm Trusted Publisher
+  environment claim stays empty until both package bindings and the workflow
+  are deliberately migrated together. The actor check is an operational
+  accident guard, not authority separation from repository administrators;
+  under this plan every administrator who can change `main` remains part of
+  the release trust boundary.
 - Every behavior change needs focused tests, including cancellation and stale
   event fencing where applicable.
 - A client abandoning an async prompt generator must keep the session fenced

@@ -4,37 +4,53 @@ on:
   push:
     tags: ["v*"]
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   NODE_VERSION: 24.16.0
   NPM_VERSION: 11.13.0
 
 jobs:
-  github-release:
-    name: Private GitHub release
+  release-candidate:
+    name: Build and verify the release candidate
     runs-on: ubuntu-24.04
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      package_json_sha256: ${{ steps.support-files.outputs.package_json_sha256 }}
+      publish_script_sha256: ${{ steps.support-files.outputs.publish_script_sha256 }}
     steps:
-      - name: Check out tagged source
+      - name: Check out the complete tagged history
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
+          fetch-depth: 0
           persist-credentials: false
-      - name: Install Node
+      - name: Install Node without a release cache
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-      - name: Pin npm and verify tag
+          package-manager-cache: false
+      - name: Verify the release actor, annotated tag, and main ancestry
+        run: |
+          test "$GITHUB_ACTOR_ID" = "22412638"
+          test "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = "tag"
+          tag_commit="$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{}")"
+          test "$tag_commit" = "$GITHUB_SHA"
+          git show-ref --verify --quiet refs/remotes/origin/main
+          git merge-base --is-ancestor "$tag_commit" refs/remotes/origin/main
+          test "$GITHUB_REF_NAME" = "v$(node -p "require('./package.json').version")"
+      - name: Install exact release tooling and dependencies
         run: |
           npm install --global "npm@${NPM_VERSION}"
-          test "$GITHUB_REF_NAME" = "v$(node -p "require('./package.json').version")"
-      - name: Install exact dependencies
-        run: npm ci
+          test "$(npm --version)" = "$NPM_VERSION"
+          npm ci
       - name: Audit runtime and development dependencies
         run: |
           npm audit --omit=dev --audit-level=high
           npm audit --audit-level=high
-      - name: Test, build, package, and verify
+      - name: Test, build, package, and verify once
         run: |
           npm run check
           SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
@@ -42,62 +58,120 @@ jobs:
           node scripts/package-release.mjs
           node scripts/verify-release.mjs
           node dist/index.js --version
-      - name: Create release and upload the exact verified asset set
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Install and run both exact npm archives
         run: |
-          gh release create "$GITHUB_REF_NAME" release/* \
-            --verify-tag \
-            --title "$GITHUB_REF_NAME" \
-            --generate-notes
-          find release -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort > /tmp/expected-assets
-          gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name' | LC_ALL=C sort > /tmp/live-assets
-          diff -u /tmp/expected-assets /tmp/live-assets
-          mkdir -p /tmp/live-release-assets
-          gh release download "$GITHUB_REF_NAME" --dir /tmp/live-release-assets
-          (cd release && sha256sum -- *) > /tmp/expected-sha256
-          (cd /tmp/live-release-assets && sha256sum -- *) > /tmp/live-sha256
-          diff -u /tmp/expected-sha256 /tmp/live-sha256
+          package_version="$(node -p 'require("./package.json").version')"
+          for archive in \
+            "release/dsh-acp-${package_version}.tgz" \
+            "release/offloophq-dsh-acp-${package_version}.tgz"
+          do
+            install_root="$(mktemp -d)"
+            npm install --global --prefix "$install_root" --ignore-scripts --no-audit --no-fund "$archive"
+            test "$("$install_root/bin/dsh-acp" --version)" = "dsh-acp ${package_version}"
+            rm -rf -- "$install_root"
+          done
+      - name: Bind minimal publish support files
+        id: support-files
+        run: |
+          echo "package_json_sha256=$(sha256sum package.json | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "publish_script_sha256=$(sha256sum scripts/publish-npm.mjs | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Upload the single verified candidate
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: dsh-acp-release-${{ github.sha }}
+          path: |
+            release/
+            package.json
+            scripts/publish-npm.mjs
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
 
-  public-npm:
-    name: Optional public npm publication without provenance
-    needs: github-release
-    if: ${{ vars.PUBLISH_PUBLIC_NPM == 'true' }}
+  github-release:
+    name: Publish the verified private GitHub release
+    needs: release-candidate
     runs-on: ubuntu-24.04
     permissions:
-      contents: read
+      contents: write
+    steps:
+      - name: Download the verified candidate
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: dsh-acp-release-${{ github.sha }}
+          path: candidate
+      - name: Verify the candidate handoff
+        env:
+          EXPECTED_PACKAGE_JSON_SHA256: ${{ needs.release-candidate.outputs.package_json_sha256 }}
+          EXPECTED_PUBLISH_SCRIPT_SHA256: ${{ needs.release-candidate.outputs.publish_script_sha256 }}
+        run: |
+          test "$(sha256sum candidate/package.json | cut -d ' ' -f 1)" = "$EXPECTED_PACKAGE_JSON_SHA256"
+          test "$(sha256sum candidate/scripts/publish-npm.mjs | cut -d ' ' -f 1)" = "$EXPECTED_PUBLISH_SCRIPT_SHA256"
+          (cd candidate/release && sha256sum -c SHA256SUMS)
+      - name: Create or reconcile the exact release asset set
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            is_draft="$(gh release view "$tag" --json isDraft --jq '.isDraft')"
+          else
+            gh release create "$tag" \
+              --draft \
+              --verify-tag \
+              --title "$tag" \
+              --generate-notes
+            is_draft="true"
+          fi
+
+          if test "$is_draft" = "true"; then
+            gh release upload "$tag" candidate/release/* --clobber
+          fi
+
+          find candidate/release -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort > /tmp/expected-assets
+          gh release view "$tag" --json assets --jq '.assets[].name' | LC_ALL=C sort > /tmp/live-assets
+          diff -u /tmp/expected-assets /tmp/live-assets
+
+          live_release="$(mktemp -d)"
+          gh release download "$tag" --dir "$live_release"
+          (cd candidate/release && sha256sum -- *) > /tmp/expected-sha256
+          (cd "$live_release" && sha256sum -- *) > /tmp/live-sha256
+          diff -u /tmp/expected-sha256 /tmp/live-sha256
+          rm -rf -- "$live_release"
+
+          if test "$is_draft" = "true"; then
+            gh release edit "$tag" --draft=false
+          fi
+
+  public-npm:
+    name: Publish both verified public npm packages
+    needs: [release-candidate, github-release]
+    runs-on: ubuntu-24.04
+    permissions:
       id-token: write
     steps:
-      - name: Check out tagged source
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-      - name: Install Node
+      - name: Install the trusted npm runtime without dependency execution
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: https://registry.npmjs.org
-          cache: npm
-      - name: Pin npm and verify tag
+          package-manager-cache: false
+      - name: Require the reviewed npm CLI
+        run: test "$(npm --version)" = "$NPM_VERSION"
+      - name: Download the verified candidate
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: dsh-acp-release-${{ github.sha }}
+          path: candidate
+      - name: Verify the candidate handoff
+        env:
+          EXPECTED_PACKAGE_JSON_SHA256: ${{ needs.release-candidate.outputs.package_json_sha256 }}
+          EXPECTED_PUBLISH_SCRIPT_SHA256: ${{ needs.release-candidate.outputs.publish_script_sha256 }}
         run: |
-          npm install --global "npm@${NPM_VERSION}"
-          test "$GITHUB_REF_NAME" = "v$(node -p "require('./package.json').version")"
-      - name: Build the publishable package
-        run: |
-          npm ci
-          npm audit --omit=dev --audit-level=high
-          npm audit --audit-level=high
-          npm run check
-          SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
-          export SOURCE_DATE_EPOCH
-          node scripts/package-release.mjs
-          node scripts/verify-release.mjs
-      - name: Publish through the configured npm trusted publisher
-        run: |
-          package_version="$(node -p 'require("./package.json").version')"
-          npm publish "release/offloophq-dsh-acp-${package_version}.tgz" --access public --provenance=false
-      - name: Read back the published package identity
-        run: |
-          expected_version="$(node -p 'require("./package.json").version')"
-          test "$(npm view "@offloophq/dsh-acp@${expected_version}" version)" = "$expected_version"
-          package_path="release/offloophq-dsh-acp-${expected_version}.tgz"
-          expected_integrity="$(node -e 'const fs=require("node:fs");const crypto=require("node:crypto");process.stdout.write("sha512-"+crypto.createHash("sha512").update(fs.readFileSync(process.argv[1])).digest("base64"))' "$package_path")"
-          test "$(npm view "@offloophq/dsh-acp@${expected_version}" dist.integrity)" = "$expected_integrity"
+          test "$(sha256sum candidate/package.json | cut -d ' ' -f 1)" = "$EXPECTED_PACKAGE_JSON_SHA256"
+          test "$(sha256sum candidate/scripts/publish-npm.mjs | cut -d ' ' -f 1)" = "$EXPECTED_PUBLISH_SCRIPT_SHA256"
+          (cd candidate/release && sha256sum -c SHA256SUMS)
+      - name: Publish or reconcile both exact package identities through OIDC
+        env:
+          DSH_ACP_PUBLISH_NPM: confirmed
+        run: node candidate/scripts/publish-npm.mjs

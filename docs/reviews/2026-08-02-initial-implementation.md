@@ -177,5 +177,6 @@ vulnerability.
 - Complete acceptance runs with at least two independent ACP hosts.
 - Implement only DSH-backed delete, auth/provider, mode/config, richer content,
   elicitation, SSE, terminal, and subagent surfaces before advertising them.
-- Publish and read back a portable release. Public npm remains an explicit
-  owner decision; Bun/native distribution remains blocked as described above.
+- Publish and read back a portable release plus both npm identities. The
+  one-time npm bootstrap and Trusted Publisher setup remain owner deployment
+  gates; Bun/native distribution remains blocked as described above.
