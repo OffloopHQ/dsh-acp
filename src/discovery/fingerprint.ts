@@ -1,0 +1,281 @@
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+
+const DSH_001_LINUX_LANDLOCK_FILES = process.platform === "linux"
+  ? [
+      "node_modules/.pnpm/node-addon-landlock-run@0.0.0-test.0/node_modules/"
+        + `node-addon-landlock-run-linux-${process.arch}/package.json`,
+      "node_modules/.pnpm/node-addon-landlock-run@0.0.0-test.0/node_modules/"
+        + `node-addon-landlock-run-linux-${process.arch}/bin/landlock-run`,
+    ]
+  : [];
+
+export const DSH_001_FINGERPRINT_FILES = Object.freeze([
+  // Installation identity and the loader entrypoints used by this driver.
+  "package.json",
+  "apps/cli/package.json",
+  "bin/dsh",
+  "tsconfig.json",
+  "node_modules/tsx/package.json",
+  "node_modules/tsx/dist/esm/index.mjs",
+  "apps/cli/config/base.cordis.yml",
+  "apps/cli/config/tui.cordis.yml",
+  "packages/ui/app-boot/package.json",
+  "packages/ui/app-boot/src/index.ts",
+  "packages/ui/app-boot/src/invariant.ts",
+  // DSH vendors these Loader/Include implementations and app-boot executes
+  // them while composing the adapter-owned temporary config tree.
+  "vendor/include/package.json",
+  "vendor/include/src/index.ts",
+  "vendor/loader/package.json",
+  "vendor/loader/src/index.ts",
+  "vendor/loader/src/internal.ts",
+  "vendor/loader/src/repository.ts",
+  "vendor/loader/src/config/entry.ts",
+  "vendor/loader/src/config/group.ts",
+  "vendor/loader/src/config/isolate.ts",
+  "vendor/loader/src/config/tree.ts",
+  "vendor/loader/src/config/utils.ts",
+  // Agent/session interfaces imported directly by the bridge.
+  "packages/core/agent/package.json",
+  "packages/core/agent/src/brand.ts",
+  "packages/core/agent/src/dispatch.ts",
+  "packages/core/agent/src/index.ts",
+  "packages/core/agent/src/llm-target.ts",
+  "packages/core/agent/src/types.ts",
+  "packages/core/agent-loop/package.json",
+  "packages/core/agent-loop/src/agent.ts",
+  "packages/core/agent-loop/src/constants.ts",
+  "packages/core/agent-loop/src/index.ts",
+  "packages/core/agent-loop/src/tool-calls.ts",
+  "packages/core/session/package.json",
+  "packages/core/session/src/chunk-rows.ts",
+  "packages/core/session/src/index.ts",
+  "packages/core/session/src/json.ts",
+  "packages/core/session/src/repair.ts",
+  "packages/core/session/src/request-header.ts",
+  "packages/core/session/src/surface.ts",
+  "packages/core/session/src/types.ts",
+  "packages/llm/llm/package.json",
+  "packages/llm/llm/src/index.ts",
+  "packages/llm/llm/src/message.ts",
+  "packages/llm/llm/src/types.ts",
+  // Permission admission is a security boundary, not just a UI detail.
+  "packages/ui/user-approval/package.json",
+  "packages/ui/user-approval/src/index.ts",
+  "packages/ui/user-approval/src/invariant.ts",
+  "packages/ui/user-approval/src/types.ts",
+  "packages/ui/permission/package.json",
+  "packages/ui/permission/src/client.ts",
+  "packages/ui/permission/src/index.ts",
+  "packages/ui/permission/src/invariant.ts",
+  "packages/ui/permission/src/types.ts",
+  "packages/sandbox/sandbox-policy/package.json",
+  "packages/sandbox/sandbox-policy/src/index.ts",
+  "packages/sandbox/sandbox-policy/src/invariant.ts",
+  "packages/sandbox/sandbox-policy/src/session-mode.ts",
+  // The effective headless composition dynamically loads these concrete
+  // process, filesystem, command, and tool-admission implementations. Hashing
+  // only sandbox-policy would fence policy vocabulary but not enforcement.
+  "packages/core/tools/package.json",
+  "packages/core/tools/src/code-mode.ts",
+  "packages/core/tools/src/index.ts",
+  "packages/core/tools/src/invariant.ts",
+  "packages/core/tools/src/json-schema.ts",
+  "packages/core/tools/src/presentation.ts",
+  "packages/core/tools/src/schema.ts",
+  "packages/core/tools/src/testing.ts",
+  "packages/core/tools/src/ts-types.ts",
+  "packages/sandbox/sandbox/package.json",
+  "packages/sandbox/sandbox/src/escalation.ts",
+  "packages/sandbox/sandbox/src/index.ts",
+  "packages/sandbox/sandbox/src/invariant.ts",
+  "packages/sandbox/sandbox/src/roots.ts",
+  "packages/sandbox/sandbox-local/package.json",
+  "packages/sandbox/sandbox-local/src/index.ts",
+  "packages/sandbox/sandbox-local/src/invariant.ts",
+  "packages/sandbox/sandbox-local/src/profiles.ts",
+  "packages/sandbox/sandbox-local/node_modules/node-addon-landlock-run/package.json",
+  "packages/sandbox/sandbox-local/node_modules/node-addon-landlock-run/lib/index.js",
+  ...DSH_001_LINUX_LANDLOCK_FILES,
+  "packages/subprocess/subprocess-local/package.json",
+  "packages/subprocess/subprocess-local/src/index.ts",
+  "packages/subprocess/subprocess-local/src/invariant.ts",
+  "packages/subprocess/subprocess-local/src/spawn.ts",
+  "packages/bash/bash/package.json",
+  "packages/bash/bash/src/index.ts",
+  "packages/bash/bash/src/invariant.ts",
+  "packages/bash/bash/src/types.ts",
+  "packages/bash/bash-local/package.json",
+  "packages/bash/bash-local/src/index.ts",
+  "packages/bash/bash-local/src/invariant.ts",
+  "packages/bash/bash-sandbox/package.json",
+  "packages/bash/bash-sandbox/src/helpers.ts",
+  "packages/bash/bash-sandbox/src/index.ts",
+  "packages/bash/bash-sandbox/src/invariant.ts",
+  "packages/bash/tool-bash/package.json",
+  "packages/bash/tool-bash/src/background.ts",
+  "packages/bash/tool-bash/src/index.ts",
+  "packages/bash/tool-bash/src/invariant.ts",
+  "packages/bash/tool-bash/src/render.ts",
+  "packages/fs/fs/package.json",
+  "packages/fs/fs/src/index.ts",
+  "packages/fs/fs/src/invariant.ts",
+  "packages/fs/fs/src/types.ts",
+  "packages/fs/fs-local/package.json",
+  "packages/fs/fs-local/src/fsio.ts",
+  "packages/fs/fs-local/src/index.ts",
+  "packages/fs/fs-local/src/invariant.ts",
+  "packages/fs/fs-local/src/win32.ts",
+  "packages/fs/fs-policy/package.json",
+  "packages/fs/fs-policy/src/index.ts",
+  "packages/fs/fs-policy/src/invariant.ts",
+  "packages/fs/fs-policy/src/types.ts",
+  "packages/fs/fs-sandbox/package.json",
+  "packages/fs/fs-sandbox/src/containment.ts",
+  "packages/fs/fs-sandbox/src/index.ts",
+  "packages/fs/fs-sandbox/src/invariant.ts",
+  "packages/fs/tool-fs/package.json",
+  "packages/fs/tool-fs/src/diff.ts",
+  "packages/fs/tool-fs/src/edit.ts",
+  "packages/fs/tool-fs/src/index.ts",
+  "packages/fs/tool-fs/src/invariant.ts",
+  "packages/fs/tool-fs/src/read-render.ts",
+  "packages/fs/tool-fs/src/read.ts",
+  "packages/fs/tool-fs/src/sandbox.ts",
+  "packages/fs/tool-fs/src/session-cwd.ts",
+  "packages/fs/tool-fs/src/write.ts",
+  "packages/fs/tool-fs-search/package.json",
+  "packages/fs/tool-fs-search/src/glob.ts",
+  "packages/fs/tool-fs-search/src/grep.ts",
+  "packages/fs/tool-fs-search/src/index.ts",
+  "packages/fs/tool-fs-search/src/invariant.ts",
+  "packages/fs/tool-fs-search/src/presentation.ts",
+  "packages/fs/tool-fs-search/src/search-core.ts",
+  "packages/fs/tool-fs-search/src/shell-quote.ts",
+  "packages/fs/tool-fs-search/src/surface.ts",
+  "packages/fs/tool-str-replace-editor/package.json",
+  "packages/fs/tool-str-replace-editor/src/index.ts",
+  "packages/fs/tool-str-replace-editor/src/invariant.ts",
+  // Session durability/query services selected by the boot composition.
+  "packages/session-persistence/session-persistence/package.json",
+  "packages/session-persistence/session-persistence/src/coordinator.ts",
+  "packages/session-persistence/session-persistence/src/index.ts",
+  "packages/session-persistence/session-persistence/src/invariant.ts",
+  "packages/session-persistence/session-persistence/src/revision.ts",
+  "packages/session-persistence/session-persistence-jsonl/package.json",
+  "packages/session-persistence/session-persistence-jsonl/src/format.ts",
+  "packages/session-persistence/session-persistence-jsonl/src/index.ts",
+  "packages/session-persistence/session-persistence-jsonl/src/invariant.ts",
+  "packages/session-persistence/session-persistence-jsonl/src/zstd.ts",
+  "packages/session-persistence/session-persistence-sqlite/package.json",
+  "packages/session-persistence/session-persistence-sqlite/src/index.ts",
+  "packages/session-persistence/session-persistence-sqlite/src/invariant.ts",
+  "packages/session-persistence/session-persistence-sqlite/src/schema.ts",
+  "packages/session-query/session-query/package.json",
+  "packages/session-query/session-query/src/config.ts",
+  "packages/session-query/session-query/src/index.ts",
+  "packages/session-query/session-query/src/invariant.ts",
+  "packages/session-query/session-query/src/sources.ts",
+  "packages/session-query/session-query/src/types.ts",
+  "packages/session-query/session-query-sqlite/package.json",
+  "packages/session-query/session-query-sqlite/src/index.ts",
+  "packages/session-query/session-query-sqlite/src/invariant.ts",
+  "packages/session-query/session-query-sqlite/src/query.ts",
+  "packages/session-query/session-query-sqlite/src/schema.ts",
+  // ACP stdio and Streamable HTTP MCP support activates these reviewed DSH and
+  // package-scoped SDK seams. SSE remains unsupported.
+  "packages/mcp/mcp-client/package.json",
+  "packages/mcp/mcp-client/src/index.ts",
+  "packages/mcp/mcp-client/src/invariant.ts",
+  "packages/mcp/mcp-client/src/tools.ts",
+  "packages/mcp/mcp-client/src/transport.ts",
+  "packages/mcp/mcp-client/node_modules/@modelcontextprotocol/sdk/package.json",
+  "packages/mcp/mcp-client/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js",
+  "packages/mcp/mcp-client/node_modules/@modelcontextprotocol/sdk/dist/esm/client/stdio.js",
+  "packages/mcp/mcp-client/node_modules/@modelcontextprotocol/sdk/dist/esm/client/streamableHttp.js",
+  "packages/mcp/mcp-client/node_modules/@modelcontextprotocol/sdk/dist/esm/shared/transport.js",
+  "packages/mcp/mcp-client/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js",
+  // Stdio MCP deliberately shares DSH's single ambient-environment scrub
+  // authority even though the SDK itself owns the child-process spawn.
+  "packages/subprocess/subprocess/package.json",
+  "packages/subprocess/subprocess/src/index.ts",
+  "packages/subprocess/subprocess/src/invariant.ts",
+  "packages/subprocess/subprocess/src/types.ts",
+  // Dynamic repository plugins are disabled by the adapter's patch filter,
+  // while the built-in search route and configured model adapters remain
+  // network-capable. Fence the DSH-owned loaders, credential resolution, and
+  // enabled network/tool implementations in addition to the MCP SDK above.
+  "packages/cordis/repository-plugin/package.json",
+  "packages/cordis/repository-plugin/src/bin.ts",
+  "packages/cordis/repository-plugin/src/format.ts",
+  "packages/cordis/repository-plugin/src/index.ts",
+  "packages/cordis/repository-plugin/src/invariant.ts",
+  "packages/cordis/repository-plugin/src/mcp.ts",
+  "packages/cordis/repository-plugin/src/source.ts",
+  "packages/credentials/credentials/package.json",
+  "packages/credentials/credentials/src/index.ts",
+  "packages/credentials/credentials/src/invariant.ts",
+  "packages/credentials/credentials-local/package.json",
+  "packages/credentials/credentials-local/src/index.ts",
+  "packages/credentials/credentials-local/src/invariant.ts",
+  "packages/llm/llm-deepseek/package.json",
+  "packages/llm/llm-deepseek/src/adapter.ts",
+  "packages/llm/llm-deepseek/src/index.ts",
+  "packages/llm/llm-deepseek/src/invariant.ts",
+  "packages/llm/llm-deepseek/src/serialize.ts",
+  "packages/llm/llm-deepseek/src/sse.ts",
+  "packages/llm/llm-deepseek/src/translate.ts",
+  "packages/llm/llm-deepseek/src/types.ts",
+  "packages/llm/llm-pi-ai/package.json",
+  "packages/llm/llm-pi-ai/src/adapter.ts",
+  "packages/llm/llm-pi-ai/src/config.ts",
+  "packages/llm/llm-pi-ai/src/context.ts",
+  "packages/llm/llm-pi-ai/src/index.ts",
+  "packages/llm/llm-pi-ai/src/invariant.ts",
+  "packages/llm/llm-pi-ai/src/replay.ts",
+  "packages/llm/llm-pi-ai/src/stream.ts",
+  "packages/web/web/package.json",
+  "packages/web/web/src/index.ts",
+  "packages/web/web/src/invariant.ts",
+  "packages/web/web/src/types.ts",
+  "packages/web/web-search-deepseek/package.json",
+  "packages/web/web-search-deepseek/src/index.ts",
+  "packages/web/web-search-deepseek/src/invariant.ts",
+  "packages/web/web-search-deepseek/src/provider.ts",
+  "packages/web/web-search-deepseek/src/types.ts",
+  "packages/web/tool-web/package.json",
+  "packages/web/tool-web/src/fetch.ts",
+  "packages/web/tool-web/src/index.ts",
+  "packages/web/tool-web/src/invariant.ts",
+  "packages/web/tool-web/src/search.ts",
+  "packages/web/tool-web/src/turndown-plugin-gfm.d.ts",
+] as const);
+
+export interface RuntimeFingerprintInput {
+  readonly rootPath: string;
+  readonly nodeVersion: string;
+  readonly tsxVersion: string;
+}
+
+/**
+ * Hash the reviewed DSH 0.0.1 compatibility seam. It covers the adapter's
+ * direct imports plus critical boot, loader/include, permission, persistence,
+ * query, MCP SDK transport, and subprocess environment-scrub boundaries. It is
+ * intentionally not a hash of every dynamic plugin or transitive dependency
+ * loaded by Cordis and is not supply-chain provenance. Paths, mtimes, inode
+ * numbers, and package-manager store locations are omitted so equivalent
+ * official installations produce the same seam identity.
+ */
+export async function computeRuntimeFingerprint(input: RuntimeFingerprintInput): Promise<string> {
+  const aggregate = createHash("sha256");
+  aggregate.update("dsh-source-0.0.1-reviewed-seam-v3\0");
+  aggregate.update(`node=${input.nodeVersion}\0tsx=${input.tsxVersion}\0`);
+  for (const relativePath of DSH_001_FINGERPRINT_FILES) {
+    const content = await readFile(join(input.rootPath, relativePath));
+    const contentHash = createHash("sha256").update(content).digest("hex");
+    aggregate.update(`${relativePath}\0${String(content.byteLength)}\0${contentHash}\0`);
+  }
+  return `sha256:${aggregate.digest("hex")}`;
+}

@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+env:
+  NODE_VERSION: 24.16.0
+  NPM_VERSION: 11.13.0
+
+jobs:
+  github-release:
+    name: Private GitHub release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Install Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Pin npm and verify tag
+        run: |
+          npm install --global "npm@${NPM_VERSION}"
+          test "$GITHUB_REF_NAME" = "v$(node -p "require('./package.json').version")"
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Audit runtime and development dependencies
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm audit --audit-level=high
+      - name: Test, build, package, and verify
+        run: |
+          npm run check
+          SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
+          export SOURCE_DATE_EPOCH
+          node scripts/package-release.mjs
+          node scripts/verify-release.mjs
+          node dist/index.js --version
+      - name: Create release and upload the exact verified asset set
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/* \
+            --verify-tag \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
+          find release -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort > /tmp/expected-assets
+          gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name' | LC_ALL=C sort > /tmp/live-assets
+          diff -u /tmp/expected-assets /tmp/live-assets
+          mkdir -p /tmp/live-release-assets
+          gh release download "$GITHUB_REF_NAME" --dir /tmp/live-release-assets
+          (cd release && sha256sum -- *) > /tmp/expected-sha256
+          (cd /tmp/live-release-assets && sha256sum -- *) > /tmp/live-sha256
+          diff -u /tmp/expected-sha256 /tmp/live-sha256
+
+  public-npm:
+    name: Optional public npm publication without provenance
+    needs: github-release
+    if: ${{ vars.PUBLISH_PUBLIC_NPM == 'true' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Install Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - name: Pin npm and verify tag
+        run: |
+          npm install --global "npm@${NPM_VERSION}"
+          test "$GITHUB_REF_NAME" = "v$(node -p "require('./package.json').version")"
+      - name: Build the publishable package
+        run: |
+          npm ci
+          npm audit --omit=dev --audit-level=high
+          npm audit --audit-level=high
+          npm run check
+          SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
+          export SOURCE_DATE_EPOCH
+          node scripts/package-release.mjs
+          node scripts/verify-release.mjs
+      - name: Publish through the configured npm trusted publisher
+        run: |
+          package_version="$(node -p 'require("./package.json").version')"
+          npm publish "release/offloophq-dsh-acp-${package_version}.tgz" --access public --provenance=false
+      - name: Read back the published package identity
+        run: |
+          expected_version="$(node -p 'require("./package.json").version')"
+          test "$(npm view "@offloophq/dsh-acp@${expected_version}" version)" = "$expected_version"
+          package_path="release/offloophq-dsh-acp-${expected_version}.tgz"
+          expected_integrity="$(node -e 'const fs=require("node:fs");const crypto=require("node:crypto");process.stdout.write("sha512-"+crypto.createHash("sha512").update(fs.readFileSync(process.argv[1])).digest("base64"))' "$package_path")"
+          test "$(npm view "@offloophq/dsh-acp@${expected_version}" dist.integrity)" = "$expected_integrity"
