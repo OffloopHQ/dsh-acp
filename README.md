@@ -36,6 +36,11 @@ dsh-acp --version
 
 `inspect --json` performs read-only discovery and prints one JSON result. `doctor --json` additionally checks that the discovered installation remains unchanged. Neither command proves a live ACP connection; the ACP client's bounded `initialize` handshake is the final readiness check.
 
+The successful `initialize` response includes the exact inspected DSH
+compatibility-seam fingerprint in `_meta.runtimeFingerprint`. A host that
+persists runtime identity can bind that value to its Endpoint generation and
+reject drift before admitting a later prompt.
+
 For a runtime fingerprint fence:
 
 ```text

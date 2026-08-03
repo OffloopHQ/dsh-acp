@@ -31,6 +31,12 @@ On failure, `error.code` and `error.message` describe the fail-closed outcome an
 
 `doctor` wraps the inspection and adds named `pass`, `fail`, or `skip` checks for discovery, layout, Node, tsx, driver selection, and final fingerprint revalidation.
 
+After the same inspection and revalidation, ACP `initialize` returns the
+selected driver in `_meta.runtimeDriverId` and the exact compatibility seam in
+`_meta.runtimeFingerprint`. Clients that persist an Endpoint generation should
+bind both values instead of treating protocol negotiation alone as runtime
+identity.
+
 ## Diagnostic safety
 
 Serve-mode diagnostics never go to stdout. Diagnostic strings redact bearer values, sensitive assignments, JSON-shaped sensitive fields, URL query secrets, and URL passwords. Nested structured fields, item counts, recursion depth, strings, and total line length are bounded. This is defense in depth; callers must still avoid passing secrets in paths or CLI arguments.

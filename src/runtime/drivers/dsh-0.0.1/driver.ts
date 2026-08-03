@@ -1022,6 +1022,7 @@ export interface Dsh001DriverOptions {
 
 export class Dsh001RuntimeDriver implements DshRuntimeDriver {
   readonly id = "dsh-source-0.0.1";
+  readonly runtimeFingerprint: string;
   readonly capabilities = DSH_001_CAPABILITIES;
   readonly authMethods: readonly RuntimeAuthMethod[] = [];
   private readonly hostLoader: Dsh001HostLoader;
@@ -1040,6 +1041,7 @@ export class Dsh001RuntimeDriver implements DshRuntimeDriver {
     readonly installation: DshInstallation,
     options: Dsh001DriverOptions = {},
   ) {
+    this.runtimeFingerprint = installation.fingerprint;
     this.hostLoader = options.hostLoader ?? loadInstalledDsh001Host;
   }
 

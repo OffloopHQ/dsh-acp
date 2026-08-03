@@ -231,6 +231,9 @@ export class DshAcpAgent {
       },
       _meta: {
         runtimeDriverId: this.#options.driver.id,
+        ...(this.#options.driver.runtimeFingerprint === undefined
+          ? {}
+          : { runtimeFingerprint: this.#options.driver.runtimeFingerprint }),
         requestedProtocolVersion: request.protocolVersion,
       },
     };

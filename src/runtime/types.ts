@@ -326,6 +326,8 @@ export interface RuntimeSession {
 
 export interface DshRuntimeDriver {
   readonly id: string;
+  /** Exact inspected DSH compatibility-seam fingerprint, when the driver owns one. */
+  readonly runtimeFingerprint?: string;
   readonly capabilities: RuntimeCapabilities;
   readonly authMethods: readonly RuntimeAuthMethod[];
   initialize(signal: AbortSignal): Promise<void>;

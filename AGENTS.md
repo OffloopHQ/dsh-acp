@@ -39,6 +39,10 @@
   supply-chain attestation; update the list and focused tests when a driver
   starts importing a new DSH, MCP SDK, loader, permission, subprocess,
   sandbox/filesystem/command enforcement, or network-provider seam.
+- Publish the exact inspected compatibility-seam fingerprint as
+  `_meta.runtimeFingerprint` on successful ACP initialization. Downstream hosts
+  may bind it to a generation fence; never replace it with the adapter version,
+  DSH package version, or a partial file hash.
 - Projected DSH tool/event data is untrusted diagnostic output. Redact
   provider-prefixed credentials, nested secret fields, Bearer/provider tokens,
   private keys, and secret-shaped object keys before emitting ACP updates.
