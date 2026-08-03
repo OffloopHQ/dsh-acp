@@ -72,6 +72,10 @@
 - Pass local npm release archives by absolute path (or an explicit `./` path).
   A bare `release/...tgz` argument is parsed by npm as GitHub shorthand rather
   than as a repository-local tarball.
+- After an npm publish succeeds, force online metadata revalidation and poll
+  only an absent version for up to one minute per package. Integrity conflicts,
+  authentication failures, invalid metadata, and command failures fail
+  immediately; propagation lag remains unknown until bounded readback settles.
 - While the private repository plan lacks GitHub Environments and tag rulesets,
   releases require actor ID `22412638`, an annotated exact-version tag, and a
   peeled commit already contained by `main`. The npm Trusted Publisher

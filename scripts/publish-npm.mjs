@@ -6,8 +6,11 @@ import { fileURLToPath } from "node:url";
 
 const EXPECTED_REPOSITORY = "OffloopHQ/dsh-acp";
 const EXPECTED_RELEASE_ACTOR_ID = "22412638";
-const DEFAULT_READBACK_ATTEMPTS = 6;
-const DEFAULT_READBACK_DELAY_MS = 2_000;
+// npm's public registry can lag a successful Trusted Publisher write. Keep
+// checking the immutable integrity for up to one minute per package before
+// treating that successful mutation as an unknown outcome.
+const DEFAULT_READBACK_ATTEMPTS = 13;
+const DEFAULT_READBACK_DELAY_MS = 5_000;
 const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
 const DEFAULT_COMMAND_KILL_GRACE_MS = 5_000;
 
@@ -90,6 +93,9 @@ export async function preparePublicationPlans(root, version) {
 function commandFailure(command, args, result) {
   const rendered = [command, ...args].join(" ");
   if (result.timedOut) return new Error(`${rendered} exceeded its publication timeout`);
+  if (result.signal !== undefined && result.signal !== null) {
+    return new Error(`${rendered} terminated by signal ${result.signal}`);
+  }
   return new Error(`${rendered} failed with exit code ${result.exitCode}`);
 }
 
@@ -114,8 +120,11 @@ function parseIntegrity(output, packageSpec) {
 
 export async function readPublishedIntegrity(plan, execute) {
   const packageSpec = `${plan.name}@${plan.version}`;
-  const args = ["view", packageSpec, "dist.integrity", "--json"];
+  const args = ["view", packageSpec, "dist.integrity", "--json", "--prefer-online"];
   const result = await execute("npm", args);
+  if (result.timedOut || (result.signal !== undefined && result.signal !== null)) {
+    throw commandFailure("npm", args, result);
+  }
   if (result.exitCode === 0) {
     return { found: true, integrity: parseIntegrity(result.stdout ?? "", packageSpec) };
   }
@@ -141,28 +150,18 @@ async function readBackPublishedIntegrity(plan, options) {
     throw new Error("readbackDelayMs must be a non-negative integer");
   }
 
-  let lastError;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    try {
-      const remote = await readPublishedIntegrity(plan, options.execute);
-      if (remote.found) {
-        assertMatchingIntegrity(plan, remote.integrity);
-        return;
-      }
-      lastError = new Error(`npm readback has not found ${plan.name}@${plan.version}`);
-    } catch (error) {
-      if (error instanceof PublishedIntegrityConflictError) throw error;
-      lastError = error;
+    const remote = await readPublishedIntegrity(plan, options.execute);
+    if (remote.found) {
+      assertMatchingIntegrity(plan, remote.integrity);
+      return;
     }
     if (attempt < attempts) {
       const sleep = options.sleep ?? ((waitMs) => new Promise((resolveDelay) => setTimeout(resolveDelay, waitMs)));
       await sleep(delayMs);
     }
   }
-  throw new Error(
-    `npm readback did not confirm ${plan.name}@${plan.version} after ${attempts} attempts`,
-    { cause: lastError },
-  );
+  throw new Error(`npm readback did not confirm ${plan.name}@${plan.version} after ${attempts} attempts`);
 }
 
 export async function publishOne(plan, options) {

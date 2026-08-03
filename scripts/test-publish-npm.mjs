@@ -81,7 +81,13 @@ try {
     });
     assert.equal(outcome.action, "skipped");
     assert.equal(fake.calls.length, 1);
-    assert.equal(fake.calls[0].args[0], "view");
+    assert.deepEqual(fake.calls[0].args, [
+      "view",
+      `${prepared[0].name}@${prepared[0].version}`,
+      "dist.integrity",
+      "--json",
+      "--prefer-online",
+    ]);
   }
 
   {
@@ -137,12 +143,123 @@ try {
   }
 
   {
+    // A successful Trusted Publisher mutation can take substantially longer
+    // than the publish command itself to appear on the public registry edge.
+    // The default policy must tolerate a full one-minute propagation window.
+    const registryMisses = Array.from({ length: 12 }, () => result(1, "", "npm error code E404"));
+    const sleeps = [];
+    const fake = fakeExecutor([
+      result(1, "", "npm error code E404"),
+      result(0),
+      ...registryMisses,
+      result(0, JSON.stringify(prepared[0].integrity)),
+    ]);
+    const outcome = await publishOne(prepared[0], {
+      execute: fake.execute,
+      sleep: async (delayMs) => sleeps.push(delayMs),
+    });
+    assert.equal(outcome.action, "published");
+    assert.equal(sleeps.length, 12);
+    assert(sleeps.every((delayMs) => delayMs === 5_000));
+  }
+
+  {
+    const sleeps = [];
+    const registryMisses = Array.from({ length: 13 }, () => result(1, "", "npm error code E404"));
+    const fake = fakeExecutor([
+      result(1, "", "npm error code E404"),
+      result(0),
+      ...registryMisses,
+      result(0, JSON.stringify(prepared[0].integrity)),
+    ]);
+    await assert.rejects(
+      publishOne(prepared[0], {
+        execute: fake.execute,
+        sleep: async (delayMs) => sleeps.push(delayMs),
+      }),
+      /npm readback did not confirm .* after 13 attempts/u,
+    );
+    assert.equal(fake.calls.length, 15);
+    assert.equal(sleeps.length, 12);
+    assert(sleeps.every((delayMs) => delayMs === 5_000));
+  }
+
+  {
     const fake = fakeExecutor([result(1, "", "npm error code E401")]);
     await assert.rejects(
       publishOne(prepared[0], { execute: fake.execute, sleep: async () => undefined }),
       /npm view .* failed with exit code 1/u,
     );
     assert.equal(fake.calls.length, 1, "non-404 lookup failures must never publish");
+  }
+
+  {
+    const fake = fakeExecutor([{
+      ...result(1, "", "npm error code E404"),
+      timedOut: true,
+      signal: "SIGTERM",
+    }]);
+    await assert.rejects(
+      publishOne(prepared[0], { execute: fake.execute, sleep: async () => assert.fail("must not retry a timeout") }),
+      /exceeded its publication timeout/u,
+    );
+    assert.equal(fake.calls.length, 1, "a timed-out E404 lookup must never authorize publish");
+  }
+
+  {
+    const fake = fakeExecutor([
+      result(1, "", "npm error code E404"),
+      result(0),
+      result(1, "", "npm error code E401"),
+    ]);
+    await assert.rejects(
+      publishOne(prepared[0], { execute: fake.execute, sleep: async () => assert.fail("must not retry E401") }),
+      /npm view .* failed with exit code 1/u,
+    );
+    assert.equal(fake.calls.length, 3, "post-publish authentication failures must fail immediately");
+  }
+
+  {
+    const fake = fakeExecutor([
+      result(1, "", "npm error code E404"),
+      result(0),
+      {
+        ...result(1, "", "npm error code E404"),
+        timedOut: true,
+        signal: "SIGTERM",
+      },
+    ]);
+    await assert.rejects(
+      publishOne(prepared[0], { execute: fake.execute, sleep: async () => assert.fail("must not retry a timeout") }),
+      /exceeded its publication timeout/u,
+    );
+    assert.equal(fake.calls.length, 3, "post-publish timeouts must fail immediately");
+  }
+
+  {
+    const fake = fakeExecutor([{
+      ...result(1, "", "npm error code E404"),
+      timedOut: false,
+      signal: "SIGKILL",
+    }]);
+    await assert.rejects(
+      publishOne(prepared[0], { execute: fake.execute, sleep: async () => assert.fail("must not retry a signal") }),
+      /terminated by signal SIGKILL/u,
+    );
+    assert.equal(fake.calls.length, 1, "a signaled E404 lookup must never authorize publish");
+  }
+
+  {
+    const fake = fakeExecutor([
+      result(1, "", "npm error code E404"),
+      result(0),
+      result(0, JSON.stringify("not-an-integrity")),
+    ]);
+    await assert.rejects(
+      publishOne(prepared[0], { execute: fake.execute, sleep: async () => assert.fail("must not retry invalid metadata") }),
+      /invalid dist\.integrity/u,
+    );
+    assert.equal(fake.calls.length, 3, "invalid registry metadata must fail immediately");
   }
 
   {
@@ -221,9 +338,13 @@ try {
       result(0, JSON.stringify(differentIntegrity)),
     ]);
     await assert.rejects(
-      publishOne(prepared[0], { execute: fake.execute, sleep: async () => undefined }),
+      publishOne(prepared[0], {
+        execute: fake.execute,
+        sleep: async () => assert.fail("must not retry an integrity conflict"),
+      }),
       /published integrity conflict/u,
     );
+    assert.equal(fake.calls.length, 3, "integrity conflicts must fail immediately");
   }
 
   {

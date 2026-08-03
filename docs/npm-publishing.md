@@ -1,7 +1,9 @@
 # npm publishing
 
-Status: dual-package release automation implemented; first registry bootstrap
-and npm/GitHub control-plane configuration pending.
+Status: dual-package release automation implemented and verified. Both package
+identities were bootstrapped at `0.1.0`; npm Trusted Publisher records bind
+`OffloopHQ/dsh-acp` and `release.yml`; `0.1.1` was published through GitHub
+Actions OIDC.
 
 ## Package identities
 
@@ -40,10 +42,13 @@ Before the first mutation, the publish coordinator reads both `name@version`
 records. An exact SHA-512 integrity match is already complete; an integrity
 conflict or non-404 lookup failure under either identity fails with zero
 publishes; only npm `E404` permits `npm publish`. Each command has a fixed
-timeout and a short termination grace before a forced kill, and the same
-integrity check is repeated with a bounded retry after publication. This makes
-a rerun safe when the first name was published and the second failed or a
-timed-out publish had an unknown result.
+timeout and a short termination grace before a forced kill. After a successful
+publish command, an absent version is revalidated online every five seconds for
+up to one minute per identity until the exact integrity is visible. Integrity
+conflicts, authentication failures, invalid metadata, and command failures do
+not retry. This makes a rerun safe when the first name was published and the
+second failed, registry propagation lagged, or a timed-out publish had an
+unknown result.
 
 ## GitHub controls and trust boundary
 
@@ -70,11 +75,13 @@ repository later gains rulesets and Environments, add a protected `v*` tag
 ruleset and a restricted publish environment in a separately reviewed change,
 then update both npm Trusted Publisher records to match.
 
-## One-time npm bootstrap
+## One-time npm bootstrap (completed at 0.1.0)
 
 npm requires a package to exist before a Trusted Publisher can be configured.
-The first version of both names therefore needs one interactive, owner-operated
-publish from the exact verified GitHub Release assets.
+The first version of both names therefore required one interactive,
+owner-operated publish from the exact verified GitHub Release assets. Keep the
+following runbook for disaster recovery or replacement package identities; do
+not repeat it for ordinary releases.
 
 Preflight:
 
@@ -89,8 +96,8 @@ Publish each exact archive with an account that owns the `offloophq` scope,
 can claim the unscoped name, and has interactive 2FA enabled:
 
 ```text
-env -u NODE_AUTH_TOKEN -u NPM_TOKEN npm publish release-bootstrap/dsh-acp-<version>.tgz --access public --provenance=false
-env -u NODE_AUTH_TOKEN -u NPM_TOKEN npm publish release-bootstrap/offloophq-dsh-acp-<version>.tgz --access public --provenance=false
+env -u NODE_AUTH_TOKEN -u NPM_TOKEN npm publish ./release-bootstrap/dsh-acp-<version>.tgz --access public --provenance=false
+env -u NODE_AUTH_TOKEN -u NPM_TOKEN npm publish ./release-bootstrap/offloophq-dsh-acp-<version>.tgz --access public --provenance=false
 ```
 
 Immediately read back both versions and `dist.integrity` values and compare
@@ -123,11 +130,12 @@ env -u NODE_AUTH_TOKEN -u NPM_TOKEN npm trust github @offloophq/dsh-acp \
   --allow-publish
 ```
 
-After a later version succeeds through OIDC, set each package's Publishing
-access to require 2FA and disallow traditional tokens. Revoke any temporary
-bootstrap token if one was used. Each package currently accepts one Trusted
-Publisher, so edits must preserve this exact repository/workflow binding. If
-an environment is added later, update both bindings atomically.
+Each package currently accepts one Trusted Publisher. Now that OIDC publication
+is verified, use npm package Settings to require 2FA and disallow traditional
+tokens, revoke any temporary bootstrap token if one was used, and live-read
+both package settings before treating token publishing as disabled. Preserve
+the exact repository/workflow binding. If an environment is added later,
+update both bindings atomically.
 
 ## Provenance boundary
 
