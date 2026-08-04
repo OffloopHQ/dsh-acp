@@ -18,6 +18,10 @@ Exit codes are `0` for a completed command, `1` for a runtime failure, and `2` f
 - `--dsh-home <path>` supplies the DSH state/configuration home for this invocation.
 - `--node <path>` fences the exact Node executable validated and used by `serve`. Because the current driver loads DSH in-process, its real path must equal `process.execPath`; callers must launch the adapter with that Node rather than naming a different executable.
 - `--expected-runtime-fingerprint <sha256:...>` rejects a launch if the discovered DSH identity differs.
+- `--external-process-confinement host-enforced` disables DSH's nested command
+  sandbox only for a host that independently owns a process-wide confinement
+  boundary. The default remains DSH `workspace-write`; this option is never
+  self-attesting protected-admission evidence.
 
 `--candidate` and `--dsh-root` are compatibility aliases for `--dsh-path`; they do not bind a runtime directly. Duplicate canonical/alias options are rejected.
 

@@ -360,6 +360,7 @@ function hasExactPlainShape(
 function assertSafeSessionPolicyEvents(
   events: readonly DshHostEvent[],
   label: string,
+  externalProcessConfinement = false,
 ): void {
   const unsafe = (): never => {
     throw new RuntimeCompatibilityError(
@@ -385,7 +386,9 @@ function assertSafeSessionPolicyEvents(
     }
     if (event.type === "sandbox/mode") {
       if (!hasExactPlainShape(event.data, ["mode"], ["source"])
-        || (event.data["mode"] !== "read-only" && event.data["mode"] !== "workspace-write")
+        || (event.data["mode"] !== "read-only"
+          && event.data["mode"] !== "workspace-write"
+          && !(externalProcessConfinement && event.data["mode"] === "danger-full-access"))
         || (Object.prototype.hasOwnProperty.call(event.data, "source")
           && event.data["source"] !== "delegation")) {
         unsafe();
@@ -1018,6 +1021,7 @@ interface PendingHandleCleanup {
 
 export interface Dsh001DriverOptions {
   readonly hostLoader?: Dsh001HostLoader;
+  readonly externalProcessConfinement?: "host-enforced";
 }
 
 export class Dsh001RuntimeDriver implements DshRuntimeDriver {
@@ -1026,6 +1030,7 @@ export class Dsh001RuntimeDriver implements DshRuntimeDriver {
   readonly capabilities = DSH_001_CAPABILITIES;
   readonly authMethods: readonly RuntimeAuthMethod[] = [];
   private readonly hostLoader: Dsh001HostLoader;
+  private readonly externalProcessConfinement: "host-enforced" | undefined;
   private host: Dsh001Host | undefined;
   private initializing: Promise<void> | undefined;
   private closing: Promise<void> | undefined;
@@ -1043,6 +1048,7 @@ export class Dsh001RuntimeDriver implements DshRuntimeDriver {
   ) {
     this.runtimeFingerprint = installation.fingerprint;
     this.hostLoader = options.hostLoader ?? loadInstalledDsh001Host;
+    this.externalProcessConfinement = options.externalProcessConfinement;
   }
 
   initialize(signal: AbortSignal): Promise<void> {
@@ -1057,7 +1063,11 @@ export class Dsh001RuntimeDriver implements DshRuntimeDriver {
     await assertDshUnchanged(this.installation);
     let host: Dsh001Host;
     try {
-      host = await this.hostLoader(this.installation);
+      host = await this.hostLoader(this.installation, {
+        ...(this.externalProcessConfinement === undefined
+          ? {}
+          : { externalProcessConfinement: this.externalProcessConfinement }),
+      });
     } catch (error) {
       if (error instanceof Dsh001HostInitializationError) {
         this.pendingHostCleanups.add(error.cleanup);
@@ -1200,7 +1210,11 @@ export class Dsh001RuntimeDriver implements DshRuntimeDriver {
         "DSH returned an agent that is not the live registry owner",
       );
     }
-    assertSafeSessionPolicyEvents(handle.agent.session.events, "DSH live session");
+    assertSafeSessionPolicyEvents(
+      handle.agent.session.events,
+      "DSH live session",
+      this.externalProcessConfinement === "host-enforced",
+    );
     if (this.closed) throw new RuntimeCompatibilityError("DSH_RUNTIME_CLOSED", "DSH runtime closed during session setup");
   }
 
@@ -1362,7 +1376,11 @@ export class Dsh001RuntimeDriver implements DshRuntimeDriver {
 
       const before = await this.hostSnapshot(host, input.sessionId, signal);
       assertSnapshotIdentity(before, input.sessionId, input.cwd);
-      assertSafeSessionPolicyEvents(before.events, "DSH persisted session");
+      assertSafeSessionPolicyEvents(
+        before.events,
+        "DSH persisted session",
+        this.externalProcessConfinement === "host-enforced",
+      );
       if (!sameJson(headerIdentity(before.session), headerIdentity(listed.header))) {
         throw new RuntimeCompatibilityError(
           "DSH_SESSION_DRIFT",
@@ -1471,7 +1489,11 @@ export class Dsh001RuntimeDriver implements DshRuntimeDriver {
       throw new RuntimeCompatibilityError("DSH_SESSION_DRIFT", "DSH fork source changed during preflight");
     }
     const seed = completeForkSeed(source.events);
-    assertSafeSessionPolicyEvents(seed, "DSH fork seed");
+    assertSafeSessionPolicyEvents(
+      seed,
+      "DSH fork seed",
+      this.externalProcessConfinement === "host-enforced",
+    );
     const childId = randomUUID();
     if (records.some(record => record.header.id === childId)) {
       throw new RuntimeCompatibilityError("DSH_SESSION_ID_COLLISION", "generated DSH fork id already exists");

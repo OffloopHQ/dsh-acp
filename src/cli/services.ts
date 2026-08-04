@@ -87,7 +87,11 @@ async function serve(options: ServeOptions, streams: CliStreams): Promise<void> 
 
   // The factory performs a second layout and fingerprint check. The selected
   // version driver checks again when ACP initialize boots the runtime.
-  const driver = await createRuntimeDriver(inspection);
+  const driver = await createRuntimeDriver(inspection, {
+    ...(options.externalProcessConfinement === undefined
+      ? {}
+      : { externalProcessConfinement: options.externalProcessConfinement }),
+  });
   const app = createDshAcpApp({
     driver,
     name: "dsh-acp",

@@ -123,7 +123,13 @@ export class Dsh001HostInitializationError extends RuntimeCompatibilityError {
   }
 }
 
-export type Dsh001HostLoader = (installation: DshInstallation) => Promise<Dsh001Host>;
+export interface Dsh001HostOptions {
+  readonly externalProcessConfinement?: "host-enforced";
+}
+export type Dsh001HostLoader = (
+  installation: DshInstallation,
+  options?: Dsh001HostOptions,
+) => Promise<Dsh001Host>;
 
 interface DshAppBootModule {
   readonly boot: (
@@ -735,10 +741,14 @@ export interface Dsh001BootPlan {
 export function createDsh001BootPlan(
   tuiPatches: readonly unknown[],
   personalPatches: readonly unknown[],
+  options: Dsh001HostOptions = {},
 ): Dsh001BootPlan {
   const shippedSurface = surfacePatches(tuiPatches, "DSH TUI overlay patch");
   const personalSurface = surfacePatches(personalPatches, "DSH personal overlay patch");
   const route = resolveRoute([...shippedSurface, ...personalSurface]);
+  const effectiveSandbox = options.externalProcessConfinement === "host-enforced"
+    ? "danger-full-access"
+    : "workspace-write";
   return {
     route,
     patches: [
@@ -751,7 +761,7 @@ export function createDsh001BootPlan(
       {
         id: "sandbox-policy",
         disabled: false,
-        config: { mode: "workspace-write", workspaceRoot: process.cwd() },
+        config: { mode: effectiveSandbox, workspaceRoot: process.cwd() },
       },
       { id: "approval", disabled: false, config: { policy: "ask" } },
       {
@@ -761,7 +771,7 @@ export function createDsh001BootPlan(
           defaultPreset: "workspace-write",
           presets: {
             "read-only": { sandbox: "read-only", approval: "ask" },
-            "workspace-write": { sandbox: "workspace-write", approval: "ask" },
+            "workspace-write": { sandbox: effectiveSandbox, approval: "ask" },
           },
         },
       },
@@ -1279,7 +1289,7 @@ function requireDisposer(value: unknown, label: string): () => void {
 }
 
 /** Load the user's normal DSH composition, but own the ACP bridge independently. */
-export const loadInstalledDsh001Host: Dsh001HostLoader = async (installation) => {
+export const loadInstalledDsh001Host: Dsh001HostLoader = async (installation, options = {}) => {
   await assertDshUnchanged(installation);
   const { appBoot, llm, mcp } = await importDshModules(installation);
   const bootWorkspace = await createDsh001BootWorkspace(installation);
@@ -1295,6 +1305,7 @@ export const loadInstalledDsh001Host: Dsh001HostLoader = async (installation) =>
     const plan = createDsh001BootPlan(
       appBoot.loadOverlayPatches("dsh-acp", tuiOverlay),
       personal,
+      options,
     );
     route = plan.route;
     context = requireContext(await appBoot.boot("dsh-acp", bootWorkspace.configPath, plan.patches));

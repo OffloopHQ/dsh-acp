@@ -22,6 +22,7 @@ interface MutableSelectionOptions {
 interface MutableServeOptions extends MutableSelectionOptions {
   nodePath?: string;
   expectedRuntimeFingerprint?: string;
+  externalProcessConfinement?: "host-enforced";
 }
 
 const valueOptions = new Set([
@@ -31,6 +32,7 @@ const valueOptions = new Set([
   "--dsh-root",
   "--node",
   "--expected-runtime-fingerprint",
+  "--external-process-confinement",
 ]);
 
 export function parseCliArguments(args: readonly string[]): CliCommand {
@@ -129,6 +131,12 @@ function parseServeOptions(args: readonly string[]): ServeOptions {
         break;
       case "--expected-runtime-fingerprint":
         setOnce(options, "expectedRuntimeFingerprint", value, "serve", option);
+        break;
+      case "--external-process-confinement":
+        if (value !== "host-enforced") {
+          throw new CliUsageError("serve: --external-process-confinement must be host-enforced");
+        }
+        setOnce(options, "externalProcessConfinement", value, "serve", option);
         break;
       default:
         throw new CliUsageError(`serve: unknown option ${option ?? ""}`);

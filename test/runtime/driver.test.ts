@@ -360,6 +360,25 @@ describe("Dsh001RuntimeDriver", () => {
     }], [{ id: "agent-loop", config: { agents: [] } }])).toThrow("does not provide an enabled main provider/model route");
   });
 
+  it("disables nested sandboxing only for an explicit host-enforced outer process boundary", () => {
+    const plan = createDsh001BootPlan([{
+      id: "agent-loop",
+      config: { agents: [{ id: "main", provider: "deepseek", model: "deepseek-chat" }] },
+    }], [], {
+      externalProcessConfinement: "host-enforced",
+    });
+    expect(plan.patches).toContainEqual({
+      id: "sandbox-policy",
+      disabled: false,
+      config: { mode: "danger-full-access", workspaceRoot: process.cwd() },
+    });
+    expect(plan.patches).toContainEqual({ id: "approval", disabled: false, config: { policy: "ask" } });
+    expect(plan.patches).toContainEqual(expect.objectContaining({
+      id: "permission",
+      config: expect.objectContaining({ defaultPreset: "workspace-write" }),
+    }));
+  });
+
   it("rejects any built-in web service or web tool in the settled DSH catalog", () => {
     const context = (
       toolNames: readonly string[],
