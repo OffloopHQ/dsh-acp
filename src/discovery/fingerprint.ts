@@ -257,6 +257,10 @@ export interface RuntimeFingerprintInput {
   readonly rootPath: string;
   readonly nodeVersion: string;
   readonly tsxVersion: string;
+  readonly tsxEsbuildPackagePath: string;
+  readonly tsxEsbuildLibraryPath: string;
+  readonly tsxEsbuildNativePackagePath: string;
+  readonly tsxEsbuildBinaryPath: string;
 }
 
 /**
@@ -270,12 +274,22 @@ export interface RuntimeFingerprintInput {
  */
 export async function computeRuntimeFingerprint(input: RuntimeFingerprintInput): Promise<string> {
   const aggregate = createHash("sha256");
-  aggregate.update("dsh-source-0.0.1-reviewed-seam-v3\0");
+  aggregate.update("dsh-source-0.0.1-reviewed-seam-v4\0");
   aggregate.update(`node=${input.nodeVersion}\0tsx=${input.tsxVersion}\0`);
   for (const relativePath of DSH_001_FINGERPRINT_FILES) {
     const content = await readFile(join(input.rootPath, relativePath));
     const contentHash = createHash("sha256").update(content).digest("hex");
     aggregate.update(`${relativePath}\0${String(content.byteLength)}\0${contentHash}\0`);
+  }
+  for (const [label, path] of [
+    ["tsx-esbuild/package.json", input.tsxEsbuildPackagePath],
+    ["tsx-esbuild/lib/main.js", input.tsxEsbuildLibraryPath],
+    ["tsx-esbuild-native/package.json", input.tsxEsbuildNativePackagePath],
+    ["tsx-esbuild-native/bin/esbuild", input.tsxEsbuildBinaryPath],
+  ] as const) {
+    const content = await readFile(path);
+    const contentHash = createHash("sha256").update(content).digest("hex");
+    aggregate.update(`${label}\0${String(content.byteLength)}\0${contentHash}\0`);
   }
   return `sha256:${aggregate.digest("hex")}`;
 }

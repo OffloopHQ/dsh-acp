@@ -59,6 +59,29 @@ export async function createDshFixture(label = "dsh-acp-fixture-"): Promise<DshF
       : `${JSON.stringify(manifest, null, 2)}\n`;
     await writeFile(absolute, content, "utf8");
   }
+  const esbuildPackage = join(root, "node_modules/esbuild/package.json");
+  const esbuildLibrary = join(root, "node_modules/esbuild/lib/main.js");
+  const nativeName = `${process.platform}-${process.arch}`;
+  const nativePackage = join(root, `node_modules/@esbuild/${nativeName}/package.json`);
+  const esbuildBinary = join(
+    root,
+    `node_modules/@esbuild/${nativeName}/bin/${process.platform === "win32" ? "esbuild.exe" : "esbuild"}`,
+  );
+  await mkdir(dirname(esbuildBinary), { recursive: true });
+  await mkdir(dirname(esbuildLibrary), { recursive: true });
+  await writeFile(
+    esbuildPackage,
+    `${JSON.stringify({ name: "esbuild", version: "0.28.1" }, null, 2)}\n`,
+    "utf8",
+  );
+  await writeFile(esbuildLibrary, "export const fixture = true\n", "utf8");
+  await writeFile(
+    nativePackage,
+    `${JSON.stringify({ name: `@esbuild/${nativeName}`, version: "0.28.1" }, null, 2)}\n`,
+    "utf8",
+  );
+  await writeFile(esbuildBinary, "#!/bin/sh\nexit 0\n", "utf8");
+  await chmod(esbuildBinary, 0o755);
   await chmod(join(root, "bin/dsh"), 0o755);
   return {
     container: await realpath(container),
