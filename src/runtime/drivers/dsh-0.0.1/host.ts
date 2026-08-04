@@ -776,6 +776,9 @@ export function createDsh001BootPlan(
         },
       },
       { id: "hmr", disabled: true },
+      ...(options.externalProcessConfinement === "host-enforced"
+        ? [{ id: "session-title-llm", disabled: true }]
+        : []),
       { id: "session-query-sqlite", config: { path: ":memory:", openAt: "first-search" } },
       ...DSH_001_DISABLED_NETWORK_PATCH_IDS.map(id => ({ id, disabled: true })),
     ],

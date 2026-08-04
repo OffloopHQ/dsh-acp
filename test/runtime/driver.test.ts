@@ -343,6 +343,7 @@ describe("Dsh001RuntimeDriver", () => {
       config: { mode: "workspace-write", workspaceRoot: process.cwd() },
     });
     expect(plan.patches).toContainEqual({ id: "approval", disabled: false, config: { policy: "ask" } });
+    expect(plan.patches).not.toContainEqual({ id: "session-title-llm", disabled: true });
     expect(plan.patches).toContainEqual({
       id: "permission",
       disabled: false,
@@ -373,6 +374,7 @@ describe("Dsh001RuntimeDriver", () => {
       config: { mode: "danger-full-access", workspaceRoot: process.cwd() },
     });
     expect(plan.patches).toContainEqual({ id: "approval", disabled: false, config: { policy: "ask" } });
+    expect(plan.patches).toContainEqual({ id: "session-title-llm", disabled: true });
     expect(plan.patches).toContainEqual(expect.objectContaining({
       id: "permission",
       config: expect.objectContaining({ defaultPreset: "workspace-write" }),
