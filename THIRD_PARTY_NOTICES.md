@@ -2,16 +2,15 @@
 
 The original `dsh-acp` project code is licensed under MIT; see `LICENSE`.
 
-The portable JavaScript and npm artifacts bundle the following runtime dependencies:
+The portable JavaScript artifact bundles the following runtime dependencies:
 
 | Component | Version | License | Full text in artifact |
 | --- | --- | --- | --- |
 | `@agentclientprotocol/sdk` | 1.3.0 | Apache-2.0 | `dist/licenses/agentclientprotocol-sdk-1.3.0-LICENSE.txt` |
 | `zod` | 4.6.7 | MIT | `dist/licenses/zod-4.6.7-LICENSE.txt` |
 
-The build fails if either required license file is missing. Both npm package
-identities include them beneath `dist/licenses/`, and release archives include
-the same complete texts.
+The build fails if either required license file is missing. Release archives
+include the complete texts beneath `licenses/`.
 
 esbuild, TypeScript, tsx, and Vitest are build or test tools and are not included as runtime code in the portable adapter artifact.
 

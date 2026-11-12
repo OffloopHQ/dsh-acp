@@ -6,8 +6,8 @@ Status: historical snapshot of the `0.1.0` preview review as of 2026-08-02.
 The client-neutral source tree had been published to the private GitHub
 repository with an exact `refs/heads/main` readback; the release and gate
 statements below describe that date, not current deployment state. Current
-authority lives in [`../distribution.md`](../distribution.md) and
-[`../npm-publishing.md`](../npm-publishing.md).
+authority lives in [`../distribution.md`](../distribution.md); npm publication
+described below has since been retired.
 
 ## Scope and evidence
 

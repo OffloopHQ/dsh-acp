@@ -68,9 +68,8 @@ tar xzf dsh-acp-0.1.2-node.tar.gz
 install -m 0755 dsh-acp-0.1.2-node/dsh-acp ~/.local/bin/dsh-acp
 ```
 
-Do not install `dsh-acp` from npm. This project no longer controls that npm
-name (see [npm publishing](docs/npm-publishing.md)), and the
-`@offloophq/dsh-acp` mirror does not exist.
+npm is not a distribution channel. The public `dsh-acp` npm name belongs to an
+unrelated party; do not install it. See [distribution](docs/distribution.md).
 
 ## Distribution and runtime boundary
 
@@ -102,9 +101,8 @@ node scripts/verify-release.mjs
 ```
 
 Build outputs are written to `dist/`; release assets are written to `release/`.
-See [npm publishing](docs/npm-publishing.md) for the blocked npm channel and
-the dual-package, Trusted Publisher, release-tag, trust-boundary, and recovery
-contracts that apply if it is restored.
+See [distribution](docs/distribution.md) for the release asset set and the
+GitHub Release workflow.
 
 ## Security properties
 
