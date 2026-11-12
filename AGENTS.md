@@ -70,8 +70,10 @@
 - The portable Node archive is the authoritative release artifact. Bun
   standalone output is a compile-only experiment until in-process DSH hosting,
   licensing, signing, and platform validation all pass.
-- `dsh-acp` is the canonical public npm identity and
-  `@offloophq/dsh-acp` is its scoped mirror. Every release must publish the
+- This project does not currently control the `dsh-acp` npm name and
+  `@offloophq/dsh-acp` does not exist; never tell users to install from npm.
+  If both identities are owned again, `dsh-acp` is canonical and
+  `@offloophq/dsh-acp` its scoped mirror. Every release must publish the
   same version and exact non-metadata payload under both names, reconcile an
   already-published version by exact registry integrity, and fail closed on a
   mismatch. Build and verify once without OIDC; only the minimal downstream
