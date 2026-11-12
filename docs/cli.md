@@ -18,6 +18,10 @@ Exit codes are `0` for a completed command, `1` for a runtime failure, and `2` f
 - `--dsh-home <path>` supplies the DSH state/configuration home for this invocation.
 - `--node <path>` fences the exact Node executable validated and used by `serve`. Because the current driver loads DSH in-process, its real path must equal `process.execPath`; callers must launch the adapter with that Node rather than naming a different executable.
 - `--expected-runtime-fingerprint <sha256:...>` rejects a launch if the discovered DSH identity differs.
+- `--external-process-confinement host-enforced` disables DSH's nested command
+  sandbox only for a host that independently owns a process-wide confinement
+  boundary. The default remains DSH `workspace-write`; this option is never
+  self-attesting protected-admission evidence.
 
 `--candidate` and `--dsh-root` are compatibility aliases for `--dsh-path`; they do not bind a runtime directly. Duplicate canonical/alias options are rejected.
 
@@ -30,6 +34,12 @@ On success, `installation` includes the driver ID, logical and resolved entry pa
 On failure, `error.code` and `error.message` describe the fail-closed outcome and `attempts` contains per-candidate status. Codes and fields may be extended; consumers should key on `ok`, `error.code`, `installation.driverId`, and `installation.fingerprint` rather than parsing prose.
 
 `doctor` wraps the inspection and adds named `pass`, `fail`, or `skip` checks for discovery, layout, Node, tsx, driver selection, and final fingerprint revalidation.
+
+After the same inspection and revalidation, ACP `initialize` returns the
+selected driver in `_meta.runtimeDriverId` and the exact compatibility seam in
+`_meta.runtimeFingerprint`. Clients that persist an Endpoint generation should
+bind both values instead of treating protocol negotiation alone as runtime
+identity.
 
 ## Diagnostic safety
 

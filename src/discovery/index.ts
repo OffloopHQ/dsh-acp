@@ -168,6 +168,10 @@ export async function inspectDsh(options: InspectDshOptions = {}): Promise<Inspe
         nodeVersion: layout.nodeVersion,
         tsxLoaderPath: layout.tsxLoaderPath,
         tsxVersion: layout.tsxVersion,
+        tsxEsbuildPackagePath: layout.tsxEsbuildPackagePath,
+        tsxEsbuildLibraryPath: layout.tsxEsbuildLibraryPath,
+        tsxEsbuildNativePackagePath: layout.tsxEsbuildNativePackagePath,
+        tsxEsbuildBinaryPath: layout.tsxEsbuildBinaryPath,
         tsconfigPath: layout.tsconfigPath,
         dshHomePath: dshHomePath(options, home, cwd),
         fingerprint: layout.fingerprint,
@@ -215,7 +219,11 @@ export async function assertDshUnchanged(installation: DshInstallation): Promise
   if (current.fingerprint !== installation.fingerprint
     || current.nodePath !== installation.nodePath
     || current.nodeVersion !== installation.nodeVersion
-    || current.tsxLoaderPath !== installation.tsxLoaderPath) {
+    || current.tsxLoaderPath !== installation.tsxLoaderPath
+    || current.tsxEsbuildPackagePath !== installation.tsxEsbuildPackagePath
+    || current.tsxEsbuildLibraryPath !== installation.tsxEsbuildLibraryPath
+    || current.tsxEsbuildNativePackagePath !== installation.tsxEsbuildNativePackagePath
+    || current.tsxEsbuildBinaryPath !== installation.tsxEsbuildBinaryPath) {
     throw new LayoutValidationError(
       "DSH_INSTALLATION_CHANGED",
       `DSH runtime changed after inspection (expected ${installation.fingerprint}, found ${current.fingerprint})`,

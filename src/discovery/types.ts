@@ -45,6 +45,10 @@ export interface DshInstallation {
   readonly nodeVersion: string;
   readonly tsxLoaderPath: string;
   readonly tsxVersion: string;
+  readonly tsxEsbuildPackagePath: string;
+  readonly tsxEsbuildLibraryPath: string;
+  readonly tsxEsbuildNativePackagePath: string;
+  readonly tsxEsbuildBinaryPath: string;
   readonly tsconfigPath: string;
   readonly dshHomePath: string;
   /** Stable content identity; installation paths and mtimes are deliberately excluded. */

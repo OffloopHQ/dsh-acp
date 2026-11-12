@@ -16,6 +16,8 @@ import {
 import {
   DSH_EVENT_MAX_SERIALIZED_BYTES,
   DSH_EVENT_MAX_STRING_BYTES,
+  DSH_HOST_MCP_INPUT_MAX_BYTES,
+  DSH_HOST_MCP_INPUT_MAX_DEPTH,
   DSH_APPROVAL_REASON_MAX_BYTES,
   createDsh001BootPlan,
   createDsh001BootWorkspace,
@@ -343,6 +345,7 @@ describe("Dsh001RuntimeDriver", () => {
       config: { mode: "workspace-write", workspaceRoot: process.cwd() },
     });
     expect(plan.patches).toContainEqual({ id: "approval", disabled: false, config: { policy: "ask" } });
+    expect(plan.patches).not.toContainEqual({ id: "session-title-llm", disabled: true });
     expect(plan.patches).toContainEqual({
       id: "permission",
       disabled: false,
@@ -358,6 +361,26 @@ describe("Dsh001RuntimeDriver", () => {
       id: "agent-loop",
       config: { agents: [{ id: "main", provider: "p", model: "m" }] },
     }], [{ id: "agent-loop", config: { agents: [] } }])).toThrow("does not provide an enabled main provider/model route");
+  });
+
+  it("disables nested sandboxing only for an explicit host-enforced outer process boundary", () => {
+    const plan = createDsh001BootPlan([{
+      id: "agent-loop",
+      config: { agents: [{ id: "main", provider: "deepseek", model: "deepseek-chat" }] },
+    }], [], {
+      externalProcessConfinement: "host-enforced",
+    });
+    expect(plan.patches).toContainEqual({
+      id: "sandbox-policy",
+      disabled: false,
+      config: { mode: "danger-full-access", workspaceRoot: process.cwd() },
+    });
+    expect(plan.patches).toContainEqual({ id: "approval", disabled: false, config: { policy: "ask" } });
+    expect(plan.patches).toContainEqual({ id: "session-title-llm", disabled: true });
+    expect(plan.patches).toContainEqual(expect.objectContaining({
+      id: "permission",
+      config: expect.objectContaining({ defaultPreset: "workspace-write" }),
+    }));
   });
 
   it("rejects any built-in web service or web tool in the settled DSH catalog", () => {
@@ -1121,6 +1144,173 @@ describe("Dsh001RuntimeDriver", () => {
       : undefined;
     expect(resultText).toContain("[REDACTED]");
     expect(Buffer.byteLength(resultText ?? "", "utf8")).toBeLessThanOrEqual(DSH_TOOL_RESULT_MAX_BLOCK_BYTES);
+  });
+
+  describe("client-supplied MCP tool input", () => {
+    const hostServer: RuntimeMcpServer = {
+      name: "host-tools",
+      transport: "http",
+      url: "https://mcp.example.test/rpc",
+    };
+
+    interface McpCall {
+      readonly callId: string;
+      readonly name: string;
+      readonly arguments: string;
+    }
+
+    async function runCalls(
+      session: RuntimeSession,
+      calls: readonly McpCall[],
+      onPermission?: (request: RuntimePermissionRequest) => void,
+    ): Promise<{ turn: CollectedTurn; rawInputs: (callId: string) => unknown[] }> {
+      const { context } = promptContext((request) => {
+        onPermission?.(request);
+        return Promise.resolve({ outcome: "selected", optionId: "allow-once" });
+      });
+      const agent = host.agents.at(-1);
+      if (agent === undefined) throw new Error("missing fake agent");
+      const collecting = collectTurn(session.prompt({ content: [{ type: "text", text: "mcp" }] }, context));
+      await Promise.resolve();
+      startTurn(agent);
+      for (const call of calls) {
+        host.emitSession(agent, { type: "tool/call", data: { turn: 1, step: 1, ...call } });
+        if (onPermission !== undefined) {
+          await host.requestApproval({ agent, toolName: call.name, callId: call.callId });
+        }
+        host.emitSession(agent, {
+          type: "tool/result",
+          data: {
+            turn: 1,
+            step: 1,
+            message: {
+              source: { kind: "tool", callId: call.callId },
+              content: [{ type: "tool-result", toolCallId: call.callId, content: [{ type: "text", text: "ok" }] }],
+            },
+          },
+        });
+      }
+      host.emitSession(agent, { type: "turn/end", data: { turn: 1, reason: { kind: "completed" } } });
+      const turn = await collecting;
+      return {
+        turn,
+        rawInputs: (callId) => turn.events.flatMap((event) =>
+          (event.type === "tool_call" || event.type === "tool_call_update") && event.toolCallId === callId
+            ? [event.rawInput]
+            : []),
+      };
+    }
+
+    async function openWith(mcpServers: readonly RuntimeMcpServer[]): Promise<RuntimeSession> {
+      return (await driver.newSession({
+        cwd: fixture.root,
+        additionalDirectories: [],
+        mcpServers,
+      }, new AbortController().signal)).session;
+    }
+
+    const longSecretInput = {
+      text: `${"long reply ".repeat(DSH_EVENT_MAX_STRING_BYTES / 4)}\nAuthorization: Bearer looks-like-a-secret`,
+      apiKey: "sk-abcdefghijklmnopqrstuvwxyz",
+      nested: { quoted: JSON.stringify({ password: "kept-verbatim" }) },
+    };
+
+    it("reports exact arguments for a live call and its permission prompt; other tools stay projected", async () => {
+      expect(Buffer.byteLength(longSecretInput.text, "utf8")).toBeGreaterThan(DSH_EVENT_MAX_STRING_BYTES);
+      const session = await openWith([hostServer]);
+      const permissions: RuntimePermissionRequest[] = [];
+      const args = JSON.stringify(longSecretInput);
+      const { turn, rawInputs } = await runCalls(session, [
+        { callId: "host-1", name: "mcp__host-tools__send_message", arguments: args },
+        { callId: "foreign-1", name: "mcp__other-tools__send_message", arguments: args },
+        { callId: "builtin-1", name: "write", arguments: args },
+      ], (request) => permissions.push(request));
+
+      expect(turn.result).toEqual({ stopReason: "end_turn" });
+      expect(rawInputs("host-1")).toEqual([longSecretInput, longSecretInput]);
+      expect(permissions.find(request => request.toolCallId === "host-1")?.rawInput).toEqual(longSecretInput);
+      for (const callId of ["foreign-1", "builtin-1"]) {
+        const [projected] = rawInputs(callId);
+        expect(projected).toMatchObject({
+          text: expect.stringContaining("[TRUNCATED]"),
+          apiKey: "[REDACTED]",
+          nested: { quoted: expect.stringContaining("[REDACTED]") },
+        });
+        expect(JSON.stringify(projected)).not.toContain("kept-verbatim");
+        expect(permissions.find(request => request.toolCallId === callId)?.rawInput).toEqual(projected);
+      }
+    });
+
+    it("reports the value DSH sends over MCP for empty, scalar, invalid, and array arguments", async () => {
+      const session = await openWith([hostServer]);
+      const cases = [
+        { arguments: "", expected: {} },
+        { arguments: "5", expected: {} },
+        { arguments: "null", expected: {} },
+        { arguments: "\"text\"", expected: {} },
+        { arguments: "{not json", expected: {} },
+        { arguments: "[1,\"two\"]", expected: [1, "two"] },
+      ];
+      const { rawInputs } = await runCalls(session, cases.map((entry, index) => ({
+        callId: `case-${String(index)}`,
+        name: "mcp__host-tools__tool",
+        arguments: entry.arguments,
+      })));
+      cases.forEach((entry, index) => {
+        expect(rawInputs(`case-${String(index)}`)).toEqual([entry.expected, entry.expected]);
+      });
+    });
+
+    it("falls back to the projection for oversized or deeply nested input without retiring the session", async () => {
+      const session = await openWith([hostServer]);
+      const grown = `[${Array.from({ length: 20_000 }, () => "9e20").join(",")}]`;
+      expect(Buffer.byteLength(grown, "utf8")).toBeLessThan(DSH_HOST_MCP_INPUT_MAX_BYTES);
+      expect(Buffer.byteLength(JSON.stringify(JSON.parse(grown)), "utf8")).toBeGreaterThan(DSH_HOST_MCP_INPUT_MAX_BYTES);
+      const deep = `${"[".repeat(DSH_HOST_MCP_INPUT_MAX_DEPTH + 1)}${"]".repeat(DSH_HOST_MCP_INPUT_MAX_DEPTH + 1)}`;
+      const veryDeep = `${"[".repeat(100_000)}${"]".repeat(100_000)}`;
+      const { turn, rawInputs } = await runCalls(session, [
+        { callId: "grown", name: "mcp__host-tools__tool", arguments: grown },
+        { callId: "deep", name: "mcp__host-tools__tool", arguments: deep },
+        { callId: "very-deep", name: "mcp__host-tools__tool", arguments: veryDeep },
+      ]);
+      expect(turn.result).toEqual({ stopReason: "end_turn" });
+      for (const callId of ["grown", "deep", "very-deep"]) {
+        const [projected] = rawInputs(callId);
+        expect(Buffer.byteLength(JSON.stringify(projected), "utf8")).toBeLessThanOrEqual(DSH_EVENT_MAX_SERIALIZED_BYTES);
+      }
+      expect(rawInputs("grown")[0]).toContain("[TRUNCATED]");
+      expect(JSON.stringify(rawInputs("deep")[0])).toContain("[MAX_DEPTH]");
+    });
+
+    it("matches hashed namespaces and truncated tool names on resume, and keeps replay projected", async () => {
+      const server: RuntimeMcpServer = {
+        name: "Client tools / with a name longer than the namespace limit",
+        transport: "http",
+        url: "https://mcp.example.test/rpc",
+      };
+      const [config] = createDsh001McpConfigs([server], fixture.root);
+      if (config === undefined) throw new Error("missing MCP config");
+      expect(config.serverName).not.toBe(server.name);
+      // DSH 0.0.1 publicToolName keeps 51 characters plus a 12-hex hash.
+      const toolName = `${`mcp__${config.serverName}__${"t".repeat(60)}`.slice(0, 51)}_0123456789ab`;
+      const args = JSON.stringify(longSecretInput);
+      const sessionId = "mcp-resume";
+      host.seedSession(appendStoredEvents(storedSession(sessionId), [{
+        type: "tool/call",
+        data: { turn: 1, step: 1, callId: "replayed-1", name: toolName, arguments: args },
+      }]));
+
+      const loaded = await driver.loadSession(loadInput(sessionId, [server]), new AbortController().signal);
+      if (loaded.replay === undefined) throw new Error("load did not return replay");
+      const replayed = (await collectReplay(loaded.replay)).find(event => event.type === "tool_call");
+      expect(replayed).toMatchObject({ rawInput: { text: expect.stringContaining("[TRUNCATED]"), apiKey: "[REDACTED]" } });
+      await loaded.session.close();
+
+      const resumed = await driver.resumeSession(loadInput(sessionId, [server]), new AbortController().signal);
+      const { rawInputs } = await runCalls(resumed.session, [{ callId: "live-1", name: toolName, arguments: args }]);
+      expect(rawInputs("live-1")).toEqual([longSecretInput, longSecretInput]);
+      await resumed.session.close();
+    });
   });
 
   it("does not expose failed-attempt raw chunks when DSH retries", async () => {

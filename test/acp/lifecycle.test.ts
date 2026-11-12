@@ -24,6 +24,8 @@ import {
 describe("ACP lifecycle coverage", () => {
   it("advertises only driver-backed capabilities", async () => {
     const driver = new FakeDshRuntimeDriver({ capabilities: minimalRuntimeCapabilities() });
+    const runtimeFingerprint = `sha256:${"a".repeat(64)}`;
+    Object.assign(driver, { runtimeFingerprint });
     const agent = new DshAcpAgent({ driver });
     const client = new FakeAcpClient();
     const response = await agent.initialize(
@@ -41,6 +43,10 @@ describe("ACP lifecycle coverage", () => {
     });
     expect(response.agentCapabilities?.providers).toBeUndefined();
     expect(response.authMethods).toEqual([]);
+    expect(response._meta).toMatchObject({
+      runtimeDriverId: "fake-dsh",
+      runtimeFingerprint,
+    });
     expect(response.agentCapabilities?._meta?.["offloop.dsh-acp"]).toMatchObject({
       steering: false,
       elicitationCompletion: false,

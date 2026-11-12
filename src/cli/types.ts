@@ -14,6 +14,7 @@ export interface RuntimeSelectionOptions {
 export interface ServeOptions extends RuntimeSelectionOptions {
   readonly nodePath?: string;
   readonly expectedRuntimeFingerprint?: string;
+  readonly externalProcessConfinement?: "host-enforced";
 }
 
 export interface InspectOptions extends RuntimeSelectionOptions {}

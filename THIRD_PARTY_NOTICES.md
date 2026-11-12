@@ -7,7 +7,7 @@ The portable JavaScript and npm artifacts bundle the following runtime dependenc
 | Component | Version | License | Full text in artifact |
 | --- | --- | --- | --- |
 | `@agentclientprotocol/sdk` | 1.3.0 | Apache-2.0 | `dist/licenses/agentclientprotocol-sdk-1.3.0-LICENSE.txt` |
-| `zod` | 4.1.12 | MIT | `dist/licenses/zod-4.1.12-LICENSE.txt` |
+| `zod` | 4.6.7 | MIT | `dist/licenses/zod-4.6.7-LICENSE.txt` |
 
 The build fails if either required license file is missing. Both npm package
 identities include them beneath `dist/licenses/`, and release archives include

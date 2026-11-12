@@ -17,6 +17,12 @@ export const DSH_TOOL_RESULT_MAX_TOTAL_BYTES = 24 * 1024;
 
 const DSH_STRING_SCAN_MAX_BYTES = 32 * 1024;
 const DSH_INPUT_PARSE_MAX_BYTES = 256 * 1024;
+/**
+ * Exact client-MCP input is reported on both the call and its result update;
+ * two copies plus the bounded projections stay below the 1 MiB event limit.
+ */
+export const DSH_HOST_MCP_INPUT_MAX_BYTES = 256 * 1024;
+export const DSH_HOST_MCP_INPUT_MAX_DEPTH = 64;
 const DSH_EVENT_MAX_KEY_BYTES = 256;
 const REDACTED = "[REDACTED]";
 const TRUNCATED = "[TRUNCATED]";
@@ -234,6 +240,58 @@ function parseInput(raw: unknown): unknown {
   }
 }
 
+/**
+ * The arguments DSH 0.0.1 sends to an MCP server for these model arguments:
+ * the agent loop parses non-empty text (empty becomes `{}`), and the MCP
+ * bridge replaces every non-object value, including unparseable text, with
+ * `{}`. Returns undefined when the value would exceed the exact-input bound
+ * or cannot be serialized, so the caller falls back to the projection.
+ */
+function exactMcpArguments(raw: unknown): unknown {
+  if (typeof raw !== "string" || byteLength(raw) > DSH_INPUT_PARSE_MAX_BYTES) return undefined;
+  let value: unknown = {};
+  if (raw.length > 0) {
+    try {
+      value = JSON.parse(raw) as unknown;
+    } catch {
+      value = {};
+    }
+  }
+  if (value === null || typeof value !== "object") value = {};
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(value);
+  } catch {
+    return undefined;
+  }
+  return byteLength(serialized) <= DSH_HOST_MCP_INPUT_MAX_BYTES
+    && jsonDepth(serialized) <= DSH_HOST_MCP_INPUT_MAX_DEPTH
+    ? value
+    : undefined;
+}
+
+/** Maximum container nesting of serialized JSON, ignoring brackets inside strings. */
+function jsonDepth(serialized: string): number {
+  let depth = 0;
+  let max = 0;
+  let inString = false;
+  for (let index = 0; index < serialized.length; index += 1) {
+    const character = serialized[index];
+    if (inString) {
+      if (character === "\\") index += 1;
+      else if (character === "\"") inString = false;
+    } else if (character === "\"") {
+      inString = true;
+    } else if (character === "{" || character === "[") {
+      depth += 1;
+      if (depth > max) max = depth;
+    } else if (character === "}" || character === "]") {
+      depth -= 1;
+    }
+  }
+  return max;
+}
+
 function dshMeta(event: DshHostEvent, extra?: Readonly<Record<string, unknown>>): Record<string, unknown> {
   const projectedExtra = record(projectForHost(extra ?? {})) ?? {};
   return {
@@ -340,10 +398,17 @@ function resultIsError(data: Readonly<Record<string, unknown>>, message: Readonl
   });
 }
 
-/** Map one committed DSH event. Raw assistant chunks are intentionally excluded. */
+/**
+ * Map one committed DSH event. Raw assistant chunks are intentionally excluded.
+ * `hostMcpToolPrefixes` (`mcp__<namespace>__`) names the MCP servers the ACP
+ * client configured for this live session. The client chose where those
+ * arguments go and may need them verbatim to correlate a call with its own
+ * MCP request, so they are reported exactly, unredacted, within a size bound.
+ */
 export function mapDshEvent(
   event: DshHostEvent,
   tools: Map<string, DshToolRecord>,
+  hostMcpToolPrefixes: readonly string[],
 ): RuntimeEvent[] {
   const data = record(event.data);
   if (data === undefined) return [];
@@ -356,7 +421,11 @@ export function mapDshEvent(
       const name = data["name"];
       if (typeof id !== "string" || typeof name !== "string") return [];
       const parsedInput = parseInput(data["arguments"]);
-      const rawInput = parsedInput === undefined ? undefined : projectForHost(parsedInput);
+      const exactInput = hostMcpToolPrefixes.some(prefix => name.startsWith(prefix))
+        ? exactMcpArguments(data["arguments"])
+        : undefined;
+      const rawInput = exactInput
+        ?? (parsedInput === undefined ? undefined : projectForHost(parsedInput));
       const tool: DshToolRecord = {
         id,
         name,

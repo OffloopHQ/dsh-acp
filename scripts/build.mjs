@@ -41,5 +41,5 @@ await copyFile(
 );
 await copyFile(
   join(root, "node_modules/zod/LICENSE"),
-  join(dist, "licenses/zod-4.1.12-LICENSE.txt"),
+  join(dist, "licenses/zod-4.6.7-LICENSE.txt"),
 );

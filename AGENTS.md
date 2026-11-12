@@ -39,11 +39,18 @@
   supply-chain attestation; update the list and focused tests when a driver
   starts importing a new DSH, MCP SDK, loader, permission, subprocess,
   sandbox/filesystem/command enforcement, or network-provider seam.
+- Publish the exact inspected compatibility-seam fingerprint as
+  `_meta.runtimeFingerprint` on successful ACP initialization. Downstream hosts
+  may bind it to a generation fence; never replace it with the adapter version,
+  DSH package version, or a partial file hash.
 - Projected DSH tool/event data is untrusted diagnostic output. Redact
   provider-prefixed credentials, nested secret fields, Bearer/provider tokens,
   private keys, and secret-shaped object keys before emitting ACP updates.
   Apply a per-event serialized-byte limit before both direct waiter delivery
   and queueing; approval reasons must use the same bounded redacted projection.
+  The only unprojected tool input is a live call to an MCP server the ACP
+  client configured: report the bounded arguments DSH sends to that server,
+  so the client can correlate the call with the MCP request it received.
 - Settle an in-flight prompt before invoking DSH's fallible synchronous cancel
   seam. A cancel failure retires that session until close retries cleanup, and
   cancellation drain must fence new prompts. Repeated cancel calls for one

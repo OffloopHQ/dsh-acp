@@ -81,6 +81,20 @@ direct waiter delivery or queueing; the 8 MiB queue cap remains a separate
 aggregate backpressure fence. DSH approval reasons are secret-redacted and
 limited to 1 KiB before they can enter ACP `_meta`.
 
+Tool-call `rawInput` is projected (secret-redacted, 4 KiB per string, 32 KiB
+per value) with one deliberate exception: a live call to an MCP server the ACP
+client configured for that session reports the arguments DSH sends to that
+server, unredacted. The client chose where those arguments go (it supplies the
+stdio command and environment or the HTTP URL and headers), and a client that
+serves the tool itself needs the exact value to correlate the ACP update with
+the MCP request it received, because DSH reports no MCP request id. The
+reported value follows DSH `0.0.1`: empty arguments and any non-object value,
+including unparseable text, become `{}`. A call belongs to such a server when
+its DSH public tool name starts with that server's `mcp__<namespace>__`;
+DSH keeps that prefix when it hashes a long name. Input above 256 KiB of
+source text, 256 KiB serialized, or 64 levels of nesting, replayed history,
+and every other tool keep the projection.
+
 The disabled built-in web surface prevents DSH from silently consuming the
 user's local search credential through `web_search` or exposing `web_fetch`.
 It is not a process egress sandbox: the selected model transport and

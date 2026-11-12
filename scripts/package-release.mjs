@@ -165,8 +165,8 @@ await writeTarGzip(
       path: join(distDir, "licenses/agentclientprotocol-sdk-1.3.0-LICENSE.txt"),
     },
     {
-      name: `${prefix}/licenses/zod-4.1.12-LICENSE.txt`,
-      path: join(distDir, "licenses/zod-4.1.12-LICENSE.txt"),
+      name: `${prefix}/licenses/zod-4.6.7-LICENSE.txt`,
+      path: join(distDir, "licenses/zod-4.6.7-LICENSE.txt"),
     },
     ...publicDocs.map((name) => ({ name: `${prefix}/${name}`, path: join(root, name) })),
   ],
@@ -277,8 +277,8 @@ if (includeBunStandalone) {
           path: join(distDir, "licenses/agentclientprotocol-sdk-1.3.0-LICENSE.txt"),
         },
         {
-          name: `${binaryPrefix}/licenses/zod-4.1.12-LICENSE.txt`,
-          path: join(distDir, "licenses/zod-4.1.12-LICENSE.txt"),
+          name: `${binaryPrefix}/licenses/zod-4.6.7-LICENSE.txt`,
+          path: join(distDir, "licenses/zod-4.6.7-LICENSE.txt"),
         },
         ...publicDocs
           .filter((name) => name !== "docs/licenses/BUN-1.3.13-LICENSE.md")

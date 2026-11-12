@@ -1,6 +1,6 @@
 import { constants } from "node:fs";
 import { access, readFile, realpath, stat } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { spawnSync } from "node:child_process";
 import { DSH_001_FINGERPRINT_FILES, computeRuntimeFingerprint } from "./fingerprint.js";
 
@@ -21,6 +21,10 @@ export interface ValidatedLayout {
   readonly nodeVersion: string;
   readonly tsxLoaderPath: string;
   readonly tsxVersion: string;
+  readonly tsxEsbuildPackagePath: string;
+  readonly tsxEsbuildLibraryPath: string;
+  readonly tsxEsbuildNativePackagePath: string;
+  readonly tsxEsbuildBinaryPath: string;
   readonly tsconfigPath: string;
   readonly fingerprint: string;
   readonly validatedFiles: readonly string[];
@@ -162,7 +166,8 @@ export async function validateDsh001Layout(rootCandidate: string, nodeCandidate:
     throw new LayoutValidationError("DSH_LAYOUT_INVALID", "DSH CLI package does not expose the expected dsh bin layout");
   }
 
-  const tsxPackage = await readPackage(join(rootPath, "node_modules/tsx/package.json"), "tsx package");
+  const tsxPackagePath = await realpath(join(rootPath, "node_modules/tsx/package.json"));
+  const tsxPackage = await readPackage(tsxPackagePath, "tsx package");
   if (tsxPackage.name !== "tsx" || typeof tsxPackage.version !== "string") {
     throw new LayoutValidationError("DSH_TSX_INVALID", "installed DSH does not contain a valid tsx runtime package");
   }
@@ -170,6 +175,46 @@ export async function validateDsh001Layout(rootCandidate: string, nodeCandidate:
   if (!/^4\./.test(tsxVersion)) {
     throw new LayoutValidationError("DSH_TSX_UNSUPPORTED", `DSH 0.0.1 source driver requires tsx 4.x; found ${tsxVersion}`);
   }
+  const tsxEsbuildPackagePath = await realpath(
+    join(dirname(tsxPackagePath), "..", "esbuild", "package.json"),
+  );
+  const tsxEsbuildPackage = await readPackage(tsxEsbuildPackagePath, "tsx esbuild package");
+  if (tsxEsbuildPackage.name !== "esbuild"
+    || typeof tsxEsbuildPackage.version !== "string"
+    || !/^0\.28\./.test(tsxEsbuildPackage.version)) {
+    throw new LayoutValidationError(
+      "DSH_TSX_ESBUILD_UNSUPPORTED",
+      `DSH 0.0.1 tsx requires the reviewed esbuild 0.28.x runtime; found ${String(tsxEsbuildPackage.version)}`,
+    );
+  }
+  const tsxEsbuildLibraryPath = await realpath(
+    join(dirname(tsxEsbuildPackagePath), "lib", "main.js"),
+  );
+  const nativePackageName = `${process.platform}-${process.arch}`;
+  const tsxEsbuildNativePackagePath = await realpath(
+    join(dirname(tsxEsbuildPackagePath), "..", "@esbuild", nativePackageName, "package.json"),
+  );
+  const nativePackage = await readPackage(tsxEsbuildNativePackagePath, "tsx native esbuild package");
+  if (nativePackage.name !== `@esbuild/${nativePackageName}`
+    || nativePackage.version !== tsxEsbuildPackage.version) {
+    throw new LayoutValidationError(
+      "DSH_TSX_ESBUILD_INVALID",
+      "tsx native esbuild package does not match its JavaScript runtime",
+    );
+  }
+  const tsxEsbuildBinaryPath = await realpath(
+    join(
+      dirname(tsxEsbuildNativePackagePath),
+      "bin",
+      process.platform === "win32" ? "esbuild.exe" : "esbuild",
+    ),
+  );
+  await access(tsxEsbuildBinaryPath, constants.X_OK).catch((error: unknown) => {
+    throw new LayoutValidationError(
+      "DSH_TSX_ESBUILD_INVALID",
+      `tsx esbuild runtime is not executable: ${tsxEsbuildBinaryPath} (${String(error)})`,
+    );
+  });
 
   const node = await validateNode(nodeCandidate);
   const launcherPath = join(rootPath, "bin/dsh");
@@ -182,6 +227,10 @@ export async function validateDsh001Layout(rootCandidate: string, nodeCandidate:
     rootPath,
     nodeVersion: node.version,
     tsxVersion,
+    tsxEsbuildPackagePath,
+    tsxEsbuildLibraryPath,
+    tsxEsbuildNativePackagePath,
+    tsxEsbuildBinaryPath,
   });
 
   return {
@@ -194,8 +243,18 @@ export async function validateDsh001Layout(rootCandidate: string, nodeCandidate:
     nodeVersion: node.version,
     tsxLoaderPath,
     tsxVersion,
+    tsxEsbuildPackagePath,
+    tsxEsbuildLibraryPath,
+    tsxEsbuildNativePackagePath,
+    tsxEsbuildBinaryPath,
     tsconfigPath,
     fingerprint,
-    validatedFiles: [...DSH_001_FINGERPRINT_FILES],
+    validatedFiles: [
+      ...DSH_001_FINGERPRINT_FILES,
+      relative(rootPath, tsxEsbuildPackagePath),
+      relative(rootPath, tsxEsbuildLibraryPath),
+      relative(rootPath, tsxEsbuildNativePackagePath),
+      relative(rootPath, tsxEsbuildBinaryPath),
+    ],
   };
 }

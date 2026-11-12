@@ -138,6 +138,16 @@ describe("DSH discovery", () => {
     await expect(assertDshUnchanged(installation)).rejects.toMatchObject({ code: "DSH_INSTALLATION_CHANGED" });
   });
 
+  it("binds the native esbuild child executable into the runtime fingerprint", async () => {
+    const value = await fixture();
+    const installation = installationOf(await inspectDsh({ dshPath: value.root, homeDir: value.home }));
+    await writeFile(installation.tsxEsbuildBinaryPath, "changed native runtime\n", "utf8");
+
+    await expect(assertDshUnchanged(installation)).rejects.toMatchObject({
+      code: "DSH_INSTALLATION_CHANGED",
+    });
+  });
+
   it("fails closed when a concrete enforcement file is absent", async () => {
     const value = await fixture();
     await rm(join(value.root, "packages/fs/fs-sandbox/src/containment.ts"));

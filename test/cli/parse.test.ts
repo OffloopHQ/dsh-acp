@@ -70,4 +70,20 @@ describe("parseCliArguments", () => {
     expect(() => parseCliArguments(["serve", "--node"])).toThrow(/requires a value/);
     expect(() => parseCliArguments(["unknown"])).toThrow(/Unknown command/);
   });
+
+  it("requires the exact host-enforced external confinement value", () => {
+    expect(parseCliArguments([
+      "serve",
+      "--external-process-confinement",
+      "host-enforced",
+    ])).toEqual({
+      kind: "serve",
+      options: { externalProcessConfinement: "host-enforced" },
+    });
+    expect(() => parseCliArguments([
+      "serve",
+      "--external-process-confinement",
+      "unverified",
+    ])).toThrow(CliUsageError);
+  });
 });
