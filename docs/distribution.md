@@ -3,10 +3,10 @@
 Status: the portable Node archive on public GitHub Releases is the only
 distribution channel. The source repository and GitHub Releases are public.
 
-npm is not a distribution channel. This project published under the `dsh-acp`
-npm name through `0.1.1`; that name now belongs to an unrelated party, and the
-scoped `@offloophq/dsh-acp` name was never created. `v0.1.2` shipped only as a
-GitHub Release. Do not install either name from npm. The package is marked
+npm is not a distribution channel. Through `0.1.1` this project published as
+`dsh-acp` and the scoped mirror `@offloophq/dsh-acp`. A 2026-11-12 registry
+readback found `dsh-acp` re-registered by an unrelated party and
+`@offloophq/dsh-acp` absent. `v0.1.2` shipped only as a GitHub Release. Do not install either name from npm. The package is marked
 `private`, and the release workflow has no npm job or OIDC token.
 
 ## Artifact matrix
