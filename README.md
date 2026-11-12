@@ -110,6 +110,7 @@ and recovery contracts.
 - The logical install anchor, physical checkout, critical file contents, Node version, and tsx version are fenced before construction and again before DSH boot.
 - `serve` keeps non-protocol output off stdout.
 - Diagnostic serialization is bounded and redacts credential-shaped keys, headers, URLs, and values.
+- Tool inputs are projected the same way, except live calls to MCP servers the client configured, which report the exact bounded arguments DSH sends to them (see [compatibility](docs/compatibility.md)).
 - The DSH composition used by the driver disables DSH telemetry and owns cleanup of sessions and the root fiber.
 - Every boot uses an adapter-owned private temporary configuration, forces the
   reviewed `workspace-write`/`ask` baseline, and leaves the installed DSH source

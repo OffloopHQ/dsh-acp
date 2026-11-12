@@ -8,6 +8,7 @@ import {
   type DshRuntimeDriver,
   type RuntimeAuthMethod,
   type RuntimeCapabilities,
+  type RuntimeMcpServer,
   type RuntimeContentBlock,
   type RuntimeEvent,
   type RuntimePermissionOutcome,
@@ -24,6 +25,7 @@ import {
 } from "../../types.js";
 import { eventTurn, mapDshEvent, projectForHost, type DshToolRecord } from "./events.js";
 import {
+  createDsh001McpConfigs,
   loadInstalledDsh001Host,
   Dsh001HostInitializationError,
   type Dsh001Host,
@@ -527,7 +529,7 @@ async function* replaySessionEvents(
     if (signal.aborted) throw cancelled("DSH session replay");
     const mapped = event.type === "user/message" || event.type === "steering/message"
       ? replayUserEvent(event)
-      : mapDshEvent(event, tools);
+      : mapDshEvent(event, tools, []);
     for (const update of mapped) {
       if (signal.aborted) throw cancelled("DSH session replay");
       yield update;
@@ -665,6 +667,7 @@ class Dsh001Session implements RuntimeSession {
     private readonly handle: DshHostAgentHandle,
     cwd: string,
     private readonly didClose: (id: string) => void,
+    private readonly hostMcpToolPrefixes: readonly string[],
   ) {
     this.id = handle.agent.id;
     this.cwd = cwd;
@@ -743,7 +746,9 @@ class Dsh001Session implements RuntimeSession {
     const eventOwnedTurn = eventTurn(event);
     if (eventOwnedTurn !== undefined && eventOwnedTurn !== inflight.turn) return;
     try {
-      for (const mapped of mapDshEvent(event, inflight.tools)) inflight.stream.push(mapped);
+      for (const mapped of mapDshEvent(event, inflight.tools, this.hostMcpToolPrefixes)) {
+        inflight.stream.push(mapped);
+      }
     } catch (error) {
       this.inflight = undefined;
       // An event that cannot be mapped means this live DSH generation is no
@@ -1300,8 +1305,15 @@ export class Dsh001RuntimeDriver implements DshRuntimeDriver {
     host: Dsh001Host,
     handle: DshHostAgentHandle,
     cwd: string,
+    mcpServers: readonly RuntimeMcpServer[],
   ): Dsh001Session {
-    const session = new Dsh001Session(host, handle, cwd, (id) => this.sessions.delete(id));
+    const session = new Dsh001Session(
+      host,
+      handle,
+      cwd,
+      (id) => this.sessions.delete(id),
+      createDsh001McpConfigs(mcpServers, cwd).map(config => `mcp__${config.serverName}__`),
+    );
     if (this.sessions.has(session.id)) {
       throw new RuntimeCompatibilityError("DSH_SESSION_ALREADY_ACTIVE", `session ${session.id} is already active`);
     }
@@ -1331,7 +1343,7 @@ export class Dsh001RuntimeDriver implements DshRuntimeDriver {
       try {
         if (signal.aborted) throw cancelled("DSH session creation");
         this.validateHandle(host, opened, requestedId, input.cwd);
-        const session = this.attachHandle(host, opened, input.cwd);
+        const session = this.attachHandle(host, opened, input.cwd, input.mcpServers);
         handle = undefined;
         return { session, descriptor: { id: session.id, cwd: session.cwd } };
       } catch (error) {
@@ -1412,7 +1424,7 @@ export class Dsh001RuntimeDriver implements DshRuntimeDriver {
         // its end-seed marker. The immutable observed prefix must remain exact;
         // the versioned public resume seam owns validation of the repair suffix.
         assertAdoptedSeed(before.events, liveSnapshot, "DSH resume", true, true);
-        const session = this.attachHandle(host, opened, input.cwd);
+        const session = this.attachHandle(host, opened, input.cwd, input.mcpServers);
         handle = undefined;
         return {
           session,
@@ -1525,7 +1537,7 @@ export class Dsh001RuntimeDriver implements DshRuntimeDriver {
           );
         }
         assertAdoptedSeed(seed, liveSnapshot, "DSH fork", seed.length > 0);
-        const session = this.attachHandle(host, opened, input.cwd);
+        const session = this.attachHandle(host, opened, input.cwd, input.mcpServers);
         handle = undefined;
         return { session, descriptor: { id: session.id, cwd: session.cwd } };
       } catch (error) {
