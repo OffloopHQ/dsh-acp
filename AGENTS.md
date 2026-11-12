@@ -70,28 +70,14 @@
 - The portable Node archive is the authoritative release artifact. Bun
   standalone output is a compile-only experiment until in-process DSH hosting,
   licensing, signing, and platform validation all pass.
-- This project does not currently control the `dsh-acp` npm name and
-  `@offloophq/dsh-acp` does not exist; never tell users to install from npm.
-  If both identities are owned again, `dsh-acp` is canonical and
-  `@offloophq/dsh-acp` its scoped mirror. Every release must publish the
-  same version and exact non-metadata payload under both names, reconcile an
-  already-published version by exact registry integrity, and fail closed on a
-  mismatch. Build and verify once without OIDC; only the minimal downstream
-  publish job may receive `id-token: write`.
-- Pass local npm release archives by absolute path (or an explicit `./` path).
-  A bare `release/...tgz` argument is parsed by npm as GitHub shorthand rather
-  than as a repository-local tarball.
-- After an npm publish succeeds, force online metadata revalidation and poll
-  only an absent version for up to one minute per package. Integrity conflicts,
-  authentication failures, invalid metadata, and command failures fail
-  immediately; propagation lag remains unknown until bounded readback settles.
+- The checksummed GitHub Release is the only distribution channel. npm is not
+  a channel: the package stays `private`, the release workflow has no npm
+  publish job or `id-token: write`, and docs must never tell users to install
+  from npm (the public `dsh-acp` name belongs to an unrelated party).
 - The public repository currently releases with actor ID `22412638`, an
   annotated exact-version tag, and a peeled commit already contained by
-  `main`. No publish Environment or tag ruleset is configured yet. The npm
-  Trusted Publisher environment claim stays empty until a release/tag freeze
-  protects a coordinated fail-closed migration of the workflow and both
-  package bindings, with every control read back before the freeze ends. The
-  actor check is an operational accident guard, not authority separation from
+  `main`. No publish Environment or tag ruleset is configured yet. The actor
+  check is an operational accident guard, not authority separation from
   repository administrators; every administrator who can change `main`
   remains part of the current release trust boundary.
 - Keep GitHub private vulnerability reporting, secret scanning, and push

@@ -18,9 +18,6 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-    outputs:
-      package_json_sha256: ${{ steps.support-files.outputs.package_json_sha256 }}
-      publish_script_sha256: ${{ steps.support-files.outputs.publish_script_sha256 }}
     steps:
       - name: Check out the complete tagged history
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -58,31 +55,11 @@ jobs:
           node scripts/package-release.mjs
           node scripts/verify-release.mjs
           node dist/index.js --version
-      - name: Install and run both exact npm archives
-        run: |
-          package_version="$(node -p 'require("./package.json").version')"
-          for archive in \
-            "$GITHUB_WORKSPACE/release/dsh-acp-${package_version}.tgz" \
-            "$GITHUB_WORKSPACE/release/offloophq-dsh-acp-${package_version}.tgz"
-          do
-            install_root="$(mktemp -d)"
-            npm install --global --prefix "$install_root" --ignore-scripts --no-audit --no-fund "$archive"
-            test "$("$install_root/bin/dsh-acp" --version)" = "dsh-acp ${package_version}"
-            rm -rf -- "$install_root"
-          done
-      - name: Bind minimal publish support files
-        id: support-files
-        run: |
-          echo "package_json_sha256=$(sha256sum package.json | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
-          echo "publish_script_sha256=$(sha256sum scripts/publish-npm.mjs | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
       - name: Upload the single verified candidate
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: dsh-acp-release-${{ github.sha }}
-          path: |
-            release/
-            package.json
-            scripts/publish-npm.mjs
+          path: release/
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
@@ -98,15 +75,11 @@ jobs:
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: dsh-acp-release-${{ github.sha }}
-          path: candidate
-      - name: Verify the candidate handoff
-        env:
-          EXPECTED_PACKAGE_JSON_SHA256: ${{ needs.release-candidate.outputs.package_json_sha256 }}
-          EXPECTED_PUBLISH_SCRIPT_SHA256: ${{ needs.release-candidate.outputs.publish_script_sha256 }}
-        run: |
-          test "$(sha256sum candidate/package.json | cut -d ' ' -f 1)" = "$EXPECTED_PACKAGE_JSON_SHA256"
-          test "$(sha256sum candidate/scripts/publish-npm.mjs | cut -d ' ' -f 1)" = "$EXPECTED_PUBLISH_SCRIPT_SHA256"
-          (cd candidate/release && sha256sum -c SHA256SUMS)
+          # A single-directory upload stores the files of release/ at the
+          # artifact root, so restore them beneath candidate/release.
+          path: candidate/release
+      - name: Verify the candidate checksums
+        run: (cd candidate/release && sha256sum -c SHA256SUMS)
       - name: Create or reconcile the exact release asset set
         env:
           GH_TOKEN: ${{ github.token }}
@@ -142,36 +115,3 @@ jobs:
           if test "$is_draft" = "true"; then
             gh release edit "$tag" --draft=false
           fi
-
-  public-npm:
-    name: Publish both verified public npm packages
-    needs: [release-candidate, github-release]
-    runs-on: ubuntu-24.04
-    permissions:
-      id-token: write
-    steps:
-      - name: Install the trusted npm runtime without dependency execution
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          registry-url: https://registry.npmjs.org
-          package-manager-cache: false
-      - name: Require the reviewed npm CLI
-        run: test "$(npm --version)" = "$NPM_VERSION"
-      - name: Download the verified candidate
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
-        with:
-          name: dsh-acp-release-${{ github.sha }}
-          path: candidate
-      - name: Verify the candidate handoff
-        env:
-          EXPECTED_PACKAGE_JSON_SHA256: ${{ needs.release-candidate.outputs.package_json_sha256 }}
-          EXPECTED_PUBLISH_SCRIPT_SHA256: ${{ needs.release-candidate.outputs.publish_script_sha256 }}
-        run: |
-          test "$(sha256sum candidate/package.json | cut -d ' ' -f 1)" = "$EXPECTED_PACKAGE_JSON_SHA256"
-          test "$(sha256sum candidate/scripts/publish-npm.mjs | cut -d ' ' -f 1)" = "$EXPECTED_PUBLISH_SCRIPT_SHA256"
-          (cd candidate/release && sha256sum -c SHA256SUMS)
-      - name: Publish or reconcile both exact package identities through OIDC
-        env:
-          DSH_ACP_PUBLISH_NPM: confirmed
-        run: node candidate/scripts/publish-npm.mjs

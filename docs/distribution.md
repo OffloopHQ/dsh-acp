@@ -1,18 +1,19 @@
 # Distribution
 
-Status: the portable Node artifact on public GitHub Releases is the only
-current distribution. `v0.1.2` published its GitHub Release; its npm
-publication failed because this project no longer controls the `dsh-acp` npm
-name (see [npm publishing](npm-publishing.md)). The source repository and
-GitHub Releases are public.
+Status: the portable Node archive on public GitHub Releases is the only
+distribution channel. The source repository and GitHub Releases are public.
+
+npm is not a distribution channel. Through `0.1.1` this project published as
+`dsh-acp` and the scoped mirror `@offloophq/dsh-acp`. A 2026-11-12 registry
+readback found `dsh-acp` re-registered by an unrelated party and
+`@offloophq/dsh-acp` absent. `v0.1.2` shipped only as a GitHub Release. Do not install either name from npm. The package is marked
+`private`, and the release workflow has no npm job or OIDC token.
 
 ## Artifact matrix
 
 | Artifact | Source access | Runtime requirement | Default release |
 | --- | --- | --- | --- |
 | Portable Node archive | public GitHub Release; `0.1.2` checksum and `--version` readback verified | Node `^22.19.0` or `>=24.0.0` and compatible installed DSH | yes |
-| `dsh-acp` npm package | name now owned by an unrelated third party; do not install | — | not published |
-| `@offloophq/dsh-acp` npm package | does not exist on the registry | — | not published |
 | Bun standalone binaries | CI retains only the compile manifest, not binaries | DSH in-process host compatibility is not implemented or validated | no; compatibility and license-review gates |
 | Host-bundled adapter | delivered inside a downstream host package | compatible installed DSH | host-controlled integration, not downloaded at runtime |
 
@@ -29,60 +30,37 @@ SHA-256 checksums establish byte integrity against the trusted manifest. They ar
 
 `node scripts/package-release.mjs` produces:
 
-- a portable Node `.tar.gz` with the executable bundle and complete runtime dependency licenses;
-- canonical `dsh-acp` and scoped `@offloophq/dsh-acp` npm `.tgz` files
-  produced by `npm pack` from one verified payload;
-- a normalized CycloneDX SBOM for runtime npm dependencies;
-- a build manifest containing bundle and lockfile hashes;
+- `dsh-acp-<version>-node.tar.gz`, a portable Node archive with the executable
+  bundle, complete runtime dependency licenses, and the public documents linked
+  from its README;
+- `dsh-acp-<version>.cdx.json`, a normalized CycloneDX SBOM for the runtime
+  dependencies;
+- `dsh-acp-<version>.build.json`, a build manifest containing bundle and
+  lockfile hashes;
 - `SHA256SUMS` covering the exact asset set.
 
 `node scripts/verify-release.mjs` verifies the exact asset and checksum set, then
-cross-binds both package names, their shared version/MIT license, exact runtime
-dependencies, the lockfile and bundle hashes, portable and npm archive
-contents, build manifest, and CycloneDX component versions and licenses. The
-two npm archives must be byte-identical for every member except their
-`package.json` identity metadata. The portable and npm artifacts also carry the
-public documents linked from their README. Optional Bun archives are bound to
-a strict, exact six-target schema, contained source paths, source binary hashes,
-and the exact JavaScript bundle before any archive path is used.
+cross-binds the package name, version, MIT license, exact runtime dependencies,
+the lockfile and bundle hashes, deterministic portable archive contents, the
+build manifest, and CycloneDX component versions and licenses. Optional Bun
+archives are bound to a strict, exact six-target schema, contained source
+paths, source binary hashes, and the exact JavaScript bundle before any archive
+path is used.
 
-## npm and provenance
+## Release workflow
 
 Every annotated release tag from the fixed release actor builds and verifies
-one candidate without OIDC, after proving exact version and `main` ancestry.
-This actor check is an operational accident guard. The public repository does
-not yet configure a publish Environment or tag ruleset, so repository
-administrators remain inside the release trust boundary because they can
-change the workflow on `main`. The same immutable workflow artifact feeds both
-the public GitHub Release and a separate minimal npm job. Only that job
-receives `id-token: write`; it does
-not check out source, install dependencies, rebuild, or repack. It publishes
-the two exact verified `.tgz` files and reads both SHA-512 registry integrities
-back. A rerun skips an existing exact version and fails closed before any
-publish if either registry entry differs. After a successful publish, only an
-absent version is revalidated online for up to one minute per identity;
-integrity, authentication, timeout, signal, metadata, and other command errors
-fail immediately. Recovery after a partial or timed-out dual-package publish
-therefore reconciles both exact registry states instead of blindly replaying an
-ambiguous mutation.
+one candidate with read-only repository access, after proving the exact
+version and `main` ancestry. This actor check is an operational accident
+guard. The public repository does not yet configure a publish Environment or
+tag ruleset, so repository administrators remain inside the release trust
+boundary because they can change the workflow on `main`.
 
-Both names required a one-time traditional-authentication bootstrap because npm
-cannot attach a Trusted Publisher to a package that does not yet exist. That
-bootstrap completed at `0.1.0`. Each package now independently trusts
-`OffloopHQ/dsh-acp` workflow `release.yml`; the environment claim stays empty
-until a separately reviewed migration freezes release tags, configures and
-reads back the workflow controls, updates each npm binding, and verifies all
-three independently. Intermediate mismatches must fail publishing, and the
-freeze remains until every readback agrees. No long-lived publish token belongs
-in GitHub Actions. The complete operational contract is in
-[`npm-publishing.md`](npm-publishing.md).
-
-The public source repository now satisfies the source-visibility precondition
-for npm provenance, but `v0.1.1` was published with provenance disabled and the
-current workflow still sets `provenance=false`. Visibility does not
-retroactively attest an existing version. Enable provenance only in a
-separately reviewed release change and verify the resulting attestation on
-both newly published registry records.
+A separate job with `contents: write` downloads that single verified
+candidate, rechecks `SHA256SUMS`, creates or reconciles a draft GitHub Release
+with exactly that asset set, downloads the live assets to compare names and
+hashes, and only then publishes the release. A rerun against an already
+published release performs the same readback without uploading.
 
 ## Experimental Bun standalone build
 

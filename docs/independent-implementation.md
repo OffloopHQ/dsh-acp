@@ -31,6 +31,6 @@ Before each release:
 1. Review the diff for copied or mechanically translated reference material.
 2. Inspect the esbuild metafile or bundle contents for unexpected packages.
 3. Regenerate and verify the SBOM and complete runtime license files.
-4. Confirm no DSH or reference-adapter file appears in the npm tarball or release archive.
+4. Confirm no DSH or reference-adapter file appears in a release archive.
 5. Run cancellation, stale-event, permission, transport, discovery, and driver tests.
 6. Record any newly inspected source and exact snapshot in this document.

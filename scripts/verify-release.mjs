@@ -19,10 +19,8 @@ const publicDocs = [
   "docs/compatibility.md",
   "docs/distribution.md",
   "docs/independent-implementation.md",
-  "docs/npm-publishing.md",
   "docs/licenses/BUN-1.3.13-LICENSE.md",
 ];
-const NPM_ARCHIVE_MTIME = 499_162_500;
 
 function sha256Bytes(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -91,17 +89,6 @@ async function deterministicTarEntries(archive) {
   return entries;
 }
 
-async function filesBelow(directory, prefix = "") {
-  const output = [];
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
-    const relative = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
-    if (entry.isDirectory()) output.push(...await filesBelow(join(directory, entry.name), relative));
-    else if (entry.isFile()) output.push(relative);
-    else throw new Error(`unexpected non-file build output: ${relative}`);
-  }
-  return output.sort();
-}
-
 function assertExactMembers(actual, expected, label) {
   assert(
     actual.join("\n") === [...expected].sort().join("\n"),
@@ -120,10 +107,6 @@ for (const line of checksumText.trimEnd().split("\n")) {
 
 const version = metadata.version;
 const portableName = `dsh-acp-${version}-node.tar.gz`;
-const npmPackages = [
-  { name: "dsh-acp", archive: `dsh-acp-${version}.tgz` },
-  { name: "@offloophq/dsh-acp", archive: `offloophq-dsh-acp-${version}.tgz` },
-];
 const sbomName = `dsh-acp-${version}.cdx.json`;
 const buildManifestName = `dsh-acp-${version}.build.json`;
 const bunManifestName = "bun-standalone-manifest.json";
@@ -138,7 +121,6 @@ if (assets.includes(bunManifestName)) {
 
 const expectedAssets = [
   portableName,
-  ...npmPackages.map((entry) => entry.archive),
   sbomName,
   buildManifestName,
 ];
@@ -162,7 +144,8 @@ for (const name of assets) {
   if (actual !== expectedChecksums.get(name)) throw new Error(`checksum mismatch for ${name}`);
 }
 
-assert(metadata.name === "dsh-acp", "unexpected canonical package name");
+assert(metadata.name === "dsh-acp", "unexpected package name");
+assert(metadata.private === true, "package must stay private; npm is not a distribution channel");
 assert(metadata.license === "MIT", "package license must be MIT");
 assert(metadata.engines?.node === "^22.19.0 || >=24.0.0", "unexpected Node engine range");
 assert(
@@ -184,10 +167,7 @@ const buildManifest = JSON.parse(await readFile(join(releaseDir, buildManifestNa
 assert(buildManifest.schemaVersion === 1, "unexpected build manifest schema");
 assert(buildManifest.name === metadata.name, "build manifest package name mismatch");
 assert(buildManifest.version === version, "build manifest version mismatch");
-assert(
-  exactJson(buildManifest.npmPackages, npmPackages.map((entry) => entry.name)),
-  "build manifest npm package identities mismatch",
-);
+assert(!("npmPackages" in buildManifest), "build manifest must not declare npm package identities");
 assert(Number.isSafeInteger(buildManifest.sourceDateEpoch), "invalid source date epoch");
 assert(buildManifest.runtime?.kind === "portable-node-bundle", "unexpected build runtime kind");
 assert(buildManifest.runtime?.nodeRange === metadata.engines.node, "build Node range mismatch");
@@ -274,119 +254,6 @@ assert(
     === await sha256(join(root, "node_modules/zod/LICENSE")),
   "Zod license output does not match the installed dependency",
 );
-
-const requiredNpmMembers = [
-  "package/LICENSE",
-  "package/README.md",
-  "package/THIRD_PARTY_NOTICES.md",
-  "package/package.json",
-  "package/dist/index.js",
-  "package/dist/index.d.ts",
-  "package/dist/licenses/agentclientprotocol-sdk-1.3.0-LICENSE.txt",
-  "package/dist/licenses/zod-4.6.7-LICENSE.txt",
-  ...publicDocs.map((name) => `package/${name}`),
-];
-const declarationMembers = (await filesBelow(join(root, "dist")))
-  .filter((name) => name.endsWith(".d.ts"))
-  .map((name) => `package/dist/${name}`);
-let canonicalNpmMemberHashes;
-let canonicalNpmMetadata;
-for (const npmPackage of npmPackages) {
-  const npmArchive = join(releaseDir, npmPackage.archive);
-  const npmMembers = await tarMembers(npmArchive);
-  assertExactMembers(
-    npmMembers,
-    [...new Set([...requiredNpmMembers, ...declarationMembers])],
-    `npm package ${npmPackage.name}`,
-  );
-  const npmArchiveMetadata = await deterministicTarEntries(npmArchive);
-  assertExactMembers(
-    npmArchiveMetadata.map((entry) => entry.name).sort(),
-    npmMembers,
-    `npm package ${npmPackage.name} metadata`,
-  );
-  for (const entry of npmArchiveMetadata) {
-    assert(
-      entry.mode === (entry.name === "package/dist/index.js" ? 0o755 : 0o644),
-      `npm package ${npmPackage.name} mode mismatch for ${entry.name}`,
-    );
-    assert(
-      entry.mtime === NPM_ARCHIVE_MTIME,
-      `npm package ${npmPackage.name} mtime mismatch for ${entry.name}`,
-    );
-  }
-  const publishedMetadata = JSON.parse(await tarMember(npmArchive, "package/package.json"));
-  assert(publishedMetadata.name === npmPackage.name, `npm package name mismatch for ${npmPackage.name}`);
-  const identityNeutralMetadata = { ...publishedMetadata };
-  delete identityNeutralMetadata.name;
-  if (canonicalNpmMetadata === undefined) canonicalNpmMetadata = identityNeutralMetadata;
-  else assert(
-    exactJson(identityNeutralMetadata, canonicalNpmMetadata),
-    "scoped and unscoped npm package metadata differs outside the package name",
-  );
-  for (const field of ["version", "license", "type", "main", "types", "bin", "engines", "dependencies"]) {
-    assert(
-      exactJson(publishedMetadata[field], metadata[field]),
-      `npm package ${npmPackage.name} metadata mismatch for ${field}`,
-    );
-  }
-  assert(
-    exactJson(publishedMetadata.publishConfig, { access: "public", provenance: false }),
-    `npm package ${npmPackage.name} publish configuration mismatch`,
-  );
-  assert(publishedMetadata.private !== true, `npm package ${npmPackage.name} unexpectedly marked private`);
-  const npmBundle = await tarMember(npmArchive, "package/dist/index.js");
-  assert(
-    sha256Bytes(npmBundle) === buildManifest.bundle.sha256,
-    `npm package ${npmPackage.name} bundle hash mismatch`,
-  );
-  assert(
-    Buffer.byteLength(npmBundle) === buildManifest.bundle.size,
-    `npm package ${npmPackage.name} bundle size mismatch`,
-  );
-  for (const sourceName of ["LICENSE", "README.md", "THIRD_PARTY_NOTICES.md"]) {
-    const archived = await tarMember(npmArchive, `package/${sourceName}`);
-    assert(
-      sha256Bytes(archived) === await sha256(join(root, sourceName)),
-      `npm package ${npmPackage.name} ${sourceName} does not match the source tree`,
-    );
-  }
-  for (const sourceName of publicDocs) {
-    const archived = await tarMember(npmArchive, `package/${sourceName}`);
-    assert(
-      sha256Bytes(archived) === await sha256(join(root, sourceName)),
-      `npm package ${npmPackage.name} ${sourceName} does not match the source tree`,
-    );
-  }
-  for (const member of declarationMembers) {
-    const relative = member.slice("package/".length);
-    const archived = await tarMember(npmArchive, member);
-    assert(
-      sha256Bytes(archived) === await sha256(join(root, relative)),
-      `npm package ${npmPackage.name} declaration ${relative} does not match the build output`,
-    );
-  }
-  for (const relative of [
-    "dist/licenses/agentclientprotocol-sdk-1.3.0-LICENSE.txt",
-    "dist/licenses/zod-4.6.7-LICENSE.txt",
-  ]) {
-    const archived = await tarMember(npmArchive, `package/${relative}`);
-    assert(
-      sha256Bytes(archived) === await sha256(join(root, relative)),
-      `npm package ${npmPackage.name} license ${relative} does not match the build output`,
-    );
-  }
-
-  const memberHashes = new Map();
-  for (const member of npmMembers.filter((name) => name !== "package/package.json")) {
-    memberHashes.set(member, sha256Bytes(await tarMember(npmArchive, member)));
-  }
-  if (canonicalNpmMemberHashes === undefined) canonicalNpmMemberHashes = memberHashes;
-  else assert(
-    exactJson([...memberHashes], [...canonicalNpmMemberHashes]),
-    "scoped and unscoped npm packages differ outside package identity metadata",
-  );
-}
 
 const sbom = JSON.parse(await readFile(join(releaseDir, sbomName), "utf8"));
 assert(sbom.bomFormat === "CycloneDX", "unexpected SBOM format");

@@ -12,14 +12,15 @@ import {
 
 const root = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const releaseWorkflow = await readFile(join(root, ".github/workflows/release.yml"), "utf8");
-assert(
-  releaseWorkflow.includes('"$GITHUB_WORKSPACE/release/dsh-acp-${package_version}.tgz"'),
-  "release workflow must install the canonical npm archive by absolute path",
-);
-assert(
-  releaseWorkflow.includes('"$GITHUB_WORKSPACE/release/offloophq-dsh-acp-${package_version}.tgz"'),
-  "release workflow must install the scoped npm archive by absolute path",
-);
+for (const forbidden of ["npm publish", "publish-npm", "id-token: write", "registry-url", ".tgz"]) {
+  assert(
+    !releaseWorkflow.includes(forbidden),
+    `release workflow must not contain npm publication (${forbidden}); GitHub Releases are the only channel`,
+  );
+}
+const packageMetadata = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+assert.equal(packageMetadata.private, true, "package.json must stay private; npm is not a distribution channel");
+assert.equal(packageMetadata.publishConfig, undefined, "package.json must not carry npm publish configuration");
 
 function validManifest() {
   return {
