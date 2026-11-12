@@ -168,7 +168,7 @@ assert(metadata.engines?.node === "^22.19.0 || >=24.0.0", "unexpected Node engin
 assert(
   exactJson(metadata.dependencies, {
     "@agentclientprotocol/sdk": "1.3.0",
-    zod: "4.1.12",
+    zod: "4.6.7",
   }),
   "runtime dependencies must remain exact and reviewed",
 );
@@ -224,7 +224,7 @@ const portableMembers = [
   `${portablePrefix}/THIRD_PARTY_NOTICES.md`,
   `${portablePrefix}/dsh-acp`,
   `${portablePrefix}/licenses/agentclientprotocol-sdk-1.3.0-LICENSE.txt`,
-  `${portablePrefix}/licenses/zod-4.1.12-LICENSE.txt`,
+  `${portablePrefix}/licenses/zod-4.6.7-LICENSE.txt`,
   ...publicDocs.map((name) => `${portablePrefix}/${name}`),
 ];
 assertExactMembers(await tarMembers(portableArchive), portableMembers, "portable archive");
@@ -256,7 +256,7 @@ for (const sourceName of publicDocs) {
 }
 for (const [archiveName, sourcePath] of [
   ["agentclientprotocol-sdk-1.3.0-LICENSE.txt", "dist/licenses/agentclientprotocol-sdk-1.3.0-LICENSE.txt"],
-  ["zod-4.1.12-LICENSE.txt", "dist/licenses/zod-4.1.12-LICENSE.txt"],
+  ["zod-4.6.7-LICENSE.txt", "dist/licenses/zod-4.6.7-LICENSE.txt"],
 ]) {
   const archived = await tarMember(portableArchive, `${portablePrefix}/licenses/${archiveName}`);
   assert(
@@ -270,7 +270,7 @@ assert(
   "ACP SDK license output does not match the installed dependency",
 );
 assert(
-  await sha256(join(root, "dist/licenses/zod-4.1.12-LICENSE.txt"))
+  await sha256(join(root, "dist/licenses/zod-4.6.7-LICENSE.txt"))
     === await sha256(join(root, "node_modules/zod/LICENSE")),
   "Zod license output does not match the installed dependency",
 );
@@ -283,7 +283,7 @@ const requiredNpmMembers = [
   "package/dist/index.js",
   "package/dist/index.d.ts",
   "package/dist/licenses/agentclientprotocol-sdk-1.3.0-LICENSE.txt",
-  "package/dist/licenses/zod-4.1.12-LICENSE.txt",
+  "package/dist/licenses/zod-4.6.7-LICENSE.txt",
   ...publicDocs.map((name) => `package/${name}`),
 ];
 const declarationMembers = (await filesBelow(join(root, "dist")))
@@ -368,7 +368,7 @@ for (const npmPackage of npmPackages) {
   }
   for (const relative of [
     "dist/licenses/agentclientprotocol-sdk-1.3.0-LICENSE.txt",
-    "dist/licenses/zod-4.1.12-LICENSE.txt",
+    "dist/licenses/zod-4.6.7-LICENSE.txt",
   ]) {
     const archived = await tarMember(npmArchive, `package/${relative}`);
     assert(
@@ -411,12 +411,12 @@ const expectedSbomComponents = new Map([
     purl: "pkg:npm/%40agentclientprotocol/sdk@1.3.0",
   }],
   ["zod", {
-    version: "4.1.12",
+    version: "4.6.7",
     licenses: ["MIT"],
-    ref: "zod@4.1.12",
+    ref: "zod@4.6.7",
     type: "library",
     scope: "required",
-    purl: "pkg:npm/zod@4.1.12",
+    purl: "pkg:npm/zod@4.6.7",
   }],
 ]);
 const bunReference = "pkg:github/oven-sh/bun@bun-v1.3.13";
@@ -451,16 +451,16 @@ for (const component of sbom.components ?? []) {
   }
 }
 const expectedDependencyGraph = [
-  { ref: "@agentclientprotocol/sdk@1.3.0", dependsOn: ["zod@4.1.12"] },
+  { ref: "@agentclientprotocol/sdk@1.3.0", dependsOn: ["zod@4.6.7"] },
   {
     ref: rootSbomReference,
     dependsOn: [
       "@agentclientprotocol/sdk@1.3.0",
       ...(bunManifest === undefined ? [] : [bunReference]),
-      "zod@4.1.12",
+      "zod@4.6.7",
     ].sort(),
   },
-  { ref: "zod@4.1.12", dependsOn: [] },
+  { ref: "zod@4.6.7", dependsOn: [] },
   ...(bunManifest === undefined ? [] : [{ ref: bunReference, dependsOn: [] }]),
 ].sort((left, right) => left.ref < right.ref ? -1 : left.ref > right.ref ? 1 : 0);
 assert(exactJson(sbom.dependencies, expectedDependencyGraph), "SBOM dependency graph mismatch");
@@ -474,7 +474,7 @@ if (bunManifest !== undefined) {
     "THIRD_PARTY_NOTICES.md",
     "dsh-acp.bundle.js",
     "licenses/agentclientprotocol-sdk-1.3.0-LICENSE.txt",
-    "licenses/zod-4.1.12-LICENSE.txt",
+    "licenses/zod-4.6.7-LICENSE.txt",
     ...publicDocs.filter((name) => name !== "docs/licenses/BUN-1.3.13-LICENSE.md"),
   ];
   for (const [index, binary] of bunManifest.binaries.entries()) {
