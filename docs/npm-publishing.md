@@ -1,10 +1,14 @@
 # npm publishing
 
-Status: dual-package release automation implemented and verified. Both package
-identities were bootstrapped at `0.1.0`; npm Trusted Publisher records bind
-`OffloopHQ/dsh-acp` and `release.yml`; `0.1.1` was published through GitHub
-Actions OIDC. The source repository is public; the current npm bindings remain
-environment-free and the current publication path still disables provenance.
+Status: blocked; npm is not a current distribution channel. A registry
+readback on 2026-11-12 found that `dsh-acp` was recreated on 2026-08-16 by an
+unrelated maintainer whose metadata points to a different repository, with
+this project's `0.1.0` and `0.1.1` no longer present, and that
+`@offloophq/dsh-acp` does not exist. The `v0.1.2` npm publish job therefore
+failed after its GitHub Release was published. The automation below remains
+in the workflow, but it cannot succeed until both identities are owned by this
+project again and their Trusted Publisher bindings are read back. Until then,
+users install from the checksummed GitHub Release.
 
 ## Package identities
 

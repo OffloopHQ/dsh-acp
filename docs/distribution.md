@@ -1,18 +1,18 @@
 # Distribution
 
-Status: portable Node artifact and dual npm publication implemented and
-verified. Both identities were bootstrapped at `0.1.0`; `v0.1.1` published the
-GitHub Release plus public `dsh-acp` and `@offloophq/dsh-acp` packages through
-the configured npm Trusted Publishers. The source repository and existing
-GitHub Releases are now public.
+Status: the portable Node artifact on public GitHub Releases is the only
+current distribution. `v0.1.2` published its GitHub Release; its npm
+publication failed because this project no longer controls the `dsh-acp` npm
+name (see [npm publishing](npm-publishing.md)). The source repository and
+GitHub Releases are public.
 
 ## Artifact matrix
 
 | Artifact | Source access | Runtime requirement | Default release |
 | --- | --- | --- | --- |
-| Portable Node archive | public GitHub Release; anonymous `0.1.1` download readback verified | Node `^22.19.0` or `>=24.0.0` and compatible installed DSH | yes |
-| `dsh-acp` npm package | public; `0.1.1` registry readback verified | Node `^22.19.0` or `>=24.0.0` and compatible installed DSH | canonical npm identity |
-| `@offloophq/dsh-acp` npm package | public; `0.1.1` registry readback verified | same as `dsh-acp` | exact-version scoped mirror |
+| Portable Node archive | public GitHub Release; `0.1.2` checksum and `--version` readback verified | Node `^22.19.0` or `>=24.0.0` and compatible installed DSH | yes |
+| `dsh-acp` npm package | name now owned by an unrelated third party; do not install | — | not published |
+| `@offloophq/dsh-acp` npm package | does not exist on the registry | — | not published |
 | Bun standalone binaries | CI retains only the compile manifest, not binaries | DSH in-process host compatibility is not implemented or validated | no; compatibility and license-review gates |
 | Host-bundled adapter | delivered inside a downstream host package | compatible installed DSH | host-controlled integration, not downloaded at runtime |
 
